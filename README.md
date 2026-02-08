@@ -14,19 +14,38 @@ NanoClaw gives you the same core functionality in a codebase you can understand 
 
 ## Quick Start
 
+### macOS
+
 ```bash
 git clone https://github.com/gavrielc/nanoclaw.git
 cd nanoclaw
 claude
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
+Then run `/setup`. Claude Code handles everything: dependencies, Docker, authentication, container setup, service configuration.
+
+### Linux VPS
+
+Two-phase setup with proper user isolation:
+
+```bash
+# Phase 1: Admin creates isolated app user with Docker Rootless
+sudo bash scripts/setup-vps.sh
+
+# Phase 2: App user deploys NanoClaw
+ssh <user>@<host>
+git clone <repo> nanoclaw && cd nanoclaw
+npx claude
+# Then run /deploy
+```
+
+See [docs/VPS-DEPLOY.md](docs/VPS-DEPLOY.md) for details.
 
 ## Philosophy
 
 **Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Claude Code walk you through it.
 
-**Secure by isolation.** Agents run in Linux containers (Apple Container on macOS, or Docker). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+**Secure by isolation.** Agents run in Docker containers. They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
 
 **Built for one user.** This isn't a framework. It's working software that fits my exact needs. You fork it and have Claude Code make it match your exact needs.
 
@@ -45,7 +64,8 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content
-- **Container isolation** - Agents sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
+- **Container isolation** - Agents sandboxed in Docker containers (macOS and Linux)
+- **VPS deployment** - Run on a Linux server with Docker Rootless, systemd, and proper user isolation
 - **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
 ## Usage
@@ -106,15 +126,15 @@ Skills we'd love to see:
 - macOS or Linux
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- [Docker](https://docker.com/products/docker-desktop) (macOS: Docker Desktop, Linux: Docker Rootless via `scripts/setup-vps.sh`)
 
 ## Architecture
 
 ```
-WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+WhatsApp (baileys) --> SQLite --> Polling loop --> Docker container (Claude Agent SDK) --> Response
 ```
 
-Single Node.js process. Agents execute in isolated Linux containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
+Single Node.js process. Agents execute in isolated Docker containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
 
 Key files:
 - `src/index.ts` - Main app: WhatsApp connection, routing, IPC
@@ -123,23 +143,30 @@ Key files:
 - `src/db.ts` - SQLite operations
 - `groups/*/CLAUDE.md` - Per-group memory
 
+### Deployment Options
+
+| Platform | Container Runtime | Service Manager | Setup |
+|----------|-------------------|-----------------|-------|
+| macOS | Docker Desktop | launchd | `/setup` |
+| Linux VPS | Docker Rootless | systemd --user | `scripts/setup-vps.sh` + `/deploy` |
+
 ## FAQ
 
 **Why WhatsApp and not Telegram/Signal/etc?**
 
 Because I use WhatsApp. Fork it and run a skill to change it. That's the whole point.
 
-**Why Apple Container instead of Docker?**
+**Why Docker?**
 
-On macOS, Apple Container is lightweight, fast, and optimized for Apple silicon. But Docker is also fully supported—during `/setup`, you can choose which runtime to use. On Linux, Docker is used automatically.
+Docker provides cross-platform support (macOS and Linux), a large ecosystem, and mature tooling. On macOS, Docker Desktop uses a lightweight Linux VM. On Linux, Docker Rootless runs without root privileges for better security.
 
 **Can I run this on Linux?**
 
-Yes. Run `/setup` and it will automatically configure Docker as the container runtime. Thanks to [@dotsetgreg](https://github.com/dotsetgreg) for contributing the `/convert-to-docker` skill.
+Yes. Run `scripts/setup-vps.sh` as admin to set up the user and Docker Rootless, then run `/deploy` as the app user. See [docs/VPS-DEPLOY.md](docs/VPS-DEPLOY.md).
 
 **Is this secure?**
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
+Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. On Linux VPS, Docker Rootless adds another layer: the Docker daemon runs without root, and UID remapping isolates container users from host users. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
 **Why no configuration files?**
 
