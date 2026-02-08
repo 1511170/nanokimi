@@ -98,15 +98,24 @@ El comando `/setup` guiará el proceso completo:
 
 #### Fase 1: Administrador (con sudo)
 
+Desde el VPS como usuario con privilegios sudo, inicia Kimi Code y usa la skill de configuración:
+
 ```bash
-# En el VPS como usuario con privilegios sudo
-curl -fsSL https://raw.githubusercontent.com/tu-usuario/nanokimi/main/scripts/setup-vps.sh | sudo bash
+# Iniciar Kimi Code
+kimi
+
+# Dentro de Kimi, ejecutar:
+/setup-vps nanokimi
 ```
 
-Esto creará:
+Esto configurará automáticamente:
 - Un usuario dedicado (ej: `nanokimi`)
 - Docker Rootless (sin necesidad de root)
-- Estructura de directorios
+- Subuid/subgid mappings
+- Linger para systemd --user
+- Container UID para mapeo de volúmenes
+
+La skill detecta automáticamente qué pasos faltan y solo configura lo necesario. También puedes verificar el estado de todos los usuarios con `/vps-status`.
 
 #### Fase 2: Usuario de la aplicación
 
@@ -167,8 +176,9 @@ nanokimi/
 │   ├── Dockerfile
 │   └── agent-runner/           # Código que corre dentro del contenedor
 ├── .kimi/skills/               # Skills de configuración
-│   ├── setup/SKILL.md
-│   ├── deploy/SKILL.md
+│   ├── setup/SKILL.md          # Setup inicial (macOS)
+│   ├── setup-vps/SKILL.md      # Setup Docker Rootless en VPS ⭐
+│   ├── deploy/SKILL.md         # Deploy de NanoKimi
 │   ├── customize/SKILL.md
 │   └── debug/SKILL.md
 ├── data/                       # Estado de la aplicación

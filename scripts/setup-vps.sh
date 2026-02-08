@@ -2,7 +2,15 @@
 # Phase 1: Admin VPS setup for NanoKimi
 # Run as a sudo user (e.g., kinto). Creates an isolated app user with Docker Rootless.
 #
-# Usage: sudo bash scripts/setup-vps.sh
+# ⚠️  DEPRECATED: Este script está en modo legacy. 
+# Se recomienda usar la skill de Kimi: /setup-vps
+# La skill proporciona:
+#   - Detección automática de estado
+#   - Configuración incremental (solo lo que falta)
+#   - Visualización clara de todos los usuarios
+#
+# Usage legacy: sudo bash scripts/setup-vps.sh
+# Usage recomendado: Iniciar 'kimi' y ejecutar '/setup-vps'
 
 set -euo pipefail
 
