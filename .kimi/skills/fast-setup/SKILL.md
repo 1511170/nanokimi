@@ -1,16 +1,17 @@
 ---
 name: fast-setup
-description: Configura un usuario de NanoKimi completamente desde un usuario sudo sin necesidad de cambiar de sesión ni hacer SSH. Instala Docker Rootless, Kimi CLI, clona el repo y deja todo listo para solo hacer WhatsApp auth. Triggers fast-setup, setup rapido, instalar usuario, full setup.
+description: Configura un usuario de NanoKimi completamente desde sudo. Primero hace la configuración de sistema (Docker Rootless), luego entra como el usuario e instala Kimi CLI, clona el repo y deja todo listo. Triggers fast-setup, setup rapido, instalar usuario, full setup sudo.
 ---
 
 # Fast Setup - Configuración Completa desde Sudo
 
-Configura un usuario de NanoKimi de una sola vez desde tu sesión sudo actual. No necesitas cambiar de usuario ni hacer SSH - todo se ejecuta remotamente con `su - usuario -c "..."`.
+Configura un usuario de NanoKimi de una sola vez desde tu sesión sudo. 
 
-**Ideal para:**
-- Configurar múltiples usuarios rápidamente
-- Automatizar setups en VPS
-- Evitar el "cambio de contexto" entre usuarios
+**Flujo:**
+1. **Fase Sudo** (como root): Docker, subuid/subgid, linger, dependencias del sistema
+2. **Fase Usuario** (con `su - usuario`): Kimi CLI, git clone, npm install, ACLs
+
+No necesitas cambiar manualmente de usuario - la skill hace `sudo su - usuario` automáticamente para la segunda fase.
 
 ---
 
@@ -20,144 +21,174 @@ Configura un usuario de NanoKimi de una sola vez desde tu sesión sudo actual. N
 /fast-setup [nombre-usuario] [repo-url]
 ```
 
-Ejemplos:
+Ejemplo:
 ```
-/fast-setup
 /fast-setup nanokimi
 /fast-setup cliente1 https://github.com/otro/nanokimi.git
 ```
 
 ---
 
-## Procedimiento
+## Fase 1: Configuración de Sistema (como root)
 
-### Paso 0: Detectar/Confirmar Usuario
+### Paso 1: Detectar/Confirmar Usuario
 
 Si no se especificó usuario, preguntar:
 > ¿Qué nombre de usuario quieres crear para NanoKimi? (ej: nanokimi)
 
-### Paso 1: Crear Usuario
-
-Verificar si existe, si no, crearlo:
-
+Verificar si existe:
 ```bash
 id USUARIO &>/dev/null && echo "Existe" || echo "No existe"
 ```
 
-Si no existe:
+Si no existe, crearlo:
 ```bash
 sudo useradd -m -r -s /bin/bash USUARIO
 sudo chmod 700 /home/USUARIO
 ```
 
-### Paso 2: Instalar Docker (si falta)
+### Paso 2: Instalar Dependencias del Sistema
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git nodejs npm acl uidmap dbus-user-session fuse-overlayfs slirp4netns curl ca-certificates
+```
+
+### Paso 3: Instalar Docker CE (si falta)
 
 ```bash
 if ! command -v docker &>/dev/null; then
   curl -fsSL https://get.docker.com | sudo sh
 fi
+
+# Asegurar que rootless extras esté instalado
+sudo apt-get install -y docker-ce-rootless-extras
 ```
 
-### Paso 3: Configurar subuid/subgid y linger
+### Paso 4: Configurar subuid/subgid
 
-Determinar siguiente rango disponible:
+Determinar siguiente rango disponible (empezar en 300000+):
 
 ```bash
 # Ver rangos existentes
 sudo cat /etc/subuid
 
-# Asignar rango (ej: 300000-365535)
-sudo usermod --add-subuids 300000-365535 --add-subgids 300000-365535 USUARIO
+# Asignar rango si no tiene
+if ! grep -q "^USUARIO:" /etc/subuid 2>/dev/null; then
+  sudo usermod --add-subuids 300000-365535 --add-subgids 300000-365535 USUARIO
+fi
+
+# Habilitar linger
 sudo loginctl enable-linger USUARIO
 ```
 
-### Paso 4: Instalar Docker Rootless (como el usuario)
+### Paso 5: Instalar Docker Rootless
+
+**Ejecutar como el usuario objetivo** (esto requiere ser root para el setup inicial):
 
 ```bash
 sudo su - USUARIO -c '
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   dockerd-rootless-setuptool.sh install
-' 2>&1 || echo "Docker rootless ya estaba configurado"
+' 2>&1 || echo "Docker rootless ya estaba configurado o continuará..."
 ```
 
-### Paso 5: Instalar Kimi CLI (como el usuario)
-
-**IMPORTANTE:** Limpiar `~/.local` si tiene malos permisos antes de instalar.
-
+Verificar que funciona:
 ```bash
-sudo su - USUARIO -c '
-  # Limpiar .local si pertenece a otro
-  if [ -d "$HOME/.local" ] && [ "$(stat -c "%U" "$HOME/.local" 2>/dev/null)" != "$(whoami)" ]; then
-    echo "Limpiando ~/.local con permisos incorrectos..."
-    rm -rf "$HOME/.local"
-  fi
-  
-  # Instalar kimi
-  curl -L code.kimi.com/install.sh | bash
-  
-  # Verificar
-  source $HOME/.local/bin/env
-  which kimi && echo "✓ Kimi instalado"
-'
+sudo su - USUARIO -c 'docker ps'
 ```
 
-### Paso 6: Clonar Repo y Setup NPM
+---
 
+## Fase 2: Configuración como el Usuario
+
+**Ahora entramos completamente como el usuario** y hacemos todo lo demás desde ahí.
+
+Cambiar a la sesión del usuario:
 ```bash
-REPO_URL="https://github.com/1511170/nanokimi.git"  # o el que el usuario especificó
-
-sudo su - USUARIO -c "
-  source \$HOME/.local/bin/env
-  
-  if [ -d nanokimi ]; then
-    echo 'Actualizando repo...'
-    cd nanokimi && git pull
-  else
-    git clone '$REPO_URL' nanokimi
-    cd nanokimi
-  fi
-  
-  npm install
-  npm run build
-  mkdir -p groups data store logs
-  echo '✓ Proyecto listo'
-"
+sudo su - USUARIO
 ```
 
-### Paso 7: Configurar ACLs
+> ℹ️ Ahora estás ejecutando comandos **como el usuario USUARIO**, no como root.
+
+### Paso 6: Instalar Kimi CLI
 
 ```bash
-SUBUID_BASE=$(sudo grep "^USUARIO:" /etc/subuid | head -1 | cut -d: -f2)
+# Limpiar .local si tiene malos permisos de otro usuario
+if [ -d "$HOME/.local" ] && [ "$(stat -c '%U' "$HOME/.local" 2>/dev/null)" != "$(whoami)" ]; then
+  echo "Limpiando ~/.local con permisos incorrectos..."
+  rm -rf "$HOME/.local"
+fi
+
+# Instalar kimi
+curl -L code.kimi.com/install.sh | bash
+source $HOME/.local/bin/env
+
+# Verificar
+which kimi && echo "✓ Kimi CLI instalado: $(kimi --version 2>/dev/null || echo 'OK')"
+```
+
+### Paso 7: Clonar Repo y Setup
+
+```bash
+REPO_URL="https://github.com/1511170/nanokimi.git"  # o el especificado
+
+if [ -d nanokimi ]; then
+  echo "Actualizando repo..."
+  cd nanokimi && git pull
+else
+  git clone "$REPO_URL" nanokimi
+  cd nanokimi
+fi
+
+# Instalar dependencias y build
+npm install
+npm run build
+
+# Crear directorios
+mkdir -p groups data store logs
+```
+
+### Paso 8: Configurar ACLs
+
+```bash
+cd nanokimi
+
+# Calcular Container UID
+SUBUID_BASE=$(grep "^$(whoami):" /etc/subuid | head -1 | cut -d: -f2)
 CONTAINER_UID=$((SUBUID_BASE + 999))
 
-sudo su - USUARIO -c "
-  cd nanokimi
-  for dir in groups data store; do
-    setfacl -R -m u:$CONTAINER_UID:rwx \$dir 2>/dev/null || true
-    setfacl -R -d -m u:$CONTAINER_UID:rwx \$dir 2>/dev/null || true
-  done
-  echo '✓ ACLs configuradas'
-"
+# Aplicar ACLs
+for dir in groups data store; do
+  setfacl -R -m u:$CONTAINER_UID:rwx "$dir" 2>/dev/null || true
+  setfacl -R -d -m u:$CONTAINER_UID:rwx "$dir" 2>/dev/null || true
+done
+
+echo "✓ ACLs configuradas para Container UID: $CONTAINER_UID"
 ```
 
-### Paso 8: API Key (preguntar al admin)
+---
 
-Preguntar:
-> ¿Quieres configurar la API key de Moonshot AI ahora, o prefieres que el usuario la configure después?
+## Paso 9: API Key
+
+Preguntar al admin (que ahora está en la sesión del usuario o puede decidir):
+> ¿Quieres configurar la API key de Moonshot AI ahora?
 > 
-> - **Ahora** (más rápido, pero yo veré la key)
-> - **Después** (más seguro, el usuario la configura)
+> 1. **Sí, configurar ahora** (desde esta sesión)
+> 2. **No, el usuario lo hará después** (más seguro)
 
-**Si elige "Ahora":**
+**Si elige configurar ahora:**
 > Pega tu API key de Moonshot AI (https://platform.moonshot.cn/):
 
 ```bash
-# Guardar key proporcionada
-sudo su - USUARIO -c "echo 'MOONSHOT_API_KEY=KEY_PROPORCIONADA' > nanokimi/.env"
+cd ~/nanokimi
+read -s API_KEY
+echo "MOONSHOT_API_KEY='$API_KEY'" > .env
+echo "✓ API key configurada"
 ```
 
-**Si elige "Después":**
-> OK. El usuario deberá crear el archivo `.env` con:
+**Si elige no configurar:**
+> OK. El usuario deberá crear el archivo `.env`:
 > ```
 > MOONSHOT_API_KEY='tu-api-key'
 > ```
@@ -166,108 +197,97 @@ sudo su - USUARIO -c "echo 'MOONSHOT_API_KEY=KEY_PROPORCIONADA' > nanokimi/.env"
 
 ## Resumen Final
 
-Mostrar al usuario:
+Una vez completado, mostrar:
 
 ```
 ✅ Setup completo para: USUARIO
 
-📍 Ruta del proyecto: /home/USUARIO/nanokimi
-🐳 Container UID: CONTAINER_UID
-🤖 Kimi CLI: /home/USUARIO/.local/bin/kimi
+📍 Proyecto: /home/USUARIO/nanokimi
+🐳 Container UID: XXXXXX
+🤖 Kimi: $(which kimi)
 
-Próximos pasos (ejecutar desde tu sesión sudo actual):
+Próximos pasos:
 
-1️⃣  WhatsApp Auth (QR aparecerá aquí):
+Desde tu sesión sudo actual, puedes:
+
+1️⃣  WhatsApp Auth (mostrará QR aquí):
     sudo su - USUARIO -c 'cd nanokimi && npm run auth'
 
-2️⃣  Iniciar servicio:
-    sudo su - USUARIO -c 'cd nanokimi && systemctl --user start nanokimi'
-
-3️⃣  Ver logs:
-    sudo su - USUARIO -c 'tail -f nanokimi/logs/nanokimi.log'
-
-O entra como el usuario:
+2️⃣  O entrar completamente como el usuario:
     sudo su - USUARIO
-    cd nanokimi && kimi
+    cd nanokimi
+    npm run auth  # Escanea QR
+    systemctl --user start nanokimi
 ```
 
 ---
 
-## Comandos Útiles Post-Setup
+## Flujo Alternativo: Todo Automatizado
 
-### Verificar estado del usuario
+Si el admin quiere automatizar TODO sin interactividad, puede ejecutar:
 
 ```bash
-sudo su - USUARIO -c '
-  echo "=== Kimi ===" && which kimi
-  echo "=== Docker ===" && docker ps
-  echo "=== Proyecto ===" && ls -la nanokimi/
+# Fase sudo (como root)
+sudo bash -c '
+  USER=nanokimi
+  id $USER || useradd -m -r -s /bin/bash $USER
+  curl -fsSL https://get.docker.com | sh
+  usermod --add-subuids 300000-365535 --add-subgids 300000-365535 $USER
+  loginctl enable-linger $USER
+  su - $USER -c "dockerd-rootless-setuptool.sh install" || true
 '
-```
 
-### Reiniciar servicio
-
-```bash
-sudo su - USUARIO -c 'cd nanokimi && systemctl --user restart nanokimi'
-```
-
-### Ver logs en tiempo real
-
-```bash
-sudo su - USUARIO -c 'tail -f nanokimi/logs/nanokimi.log'
+# Fase usuario (entrar como el usuario)
+sudo su - nanokimi << 'EOF'
+  curl -L code.kimi.com/install.sh | bash
+  source $HOME/.local/bin/env
+  git clone https://github.com/1511170/nanokimi.git
+  cd nanokimi
+  npm install && npm run build
+  mkdir -p groups data store
+  SUBUID=$(grep "^$(whoami):" /etc/subuid | cut -d: -f2)
+  for d in groups data store; do
+    setfacl -R -m u:$((SUBUID+999)):rwx $d 2>/dev/null || true
+  done
+  echo "Listo. Configura .env y corre: npm run auth"
+EOF
 ```
 
 ---
 
 ## Troubleshooting
 
-### "cannot access $HOME/.local: Permission denied"
+### Error: "cannot access $HOME/.local: Permission denied"
 
-El directorio `~/.local` fue creado por otro usuario. La skill ya lo limpia automáticamente, pero si persiste:
-
+Otro usuario creó `~/.local`. Limpiar:
 ```bash
 sudo rm -rf /home/USUARIO/.local
-# Re-ejecutar paso 5
+# Reintentar instalación de kimi
 ```
 
-### "docker: command not found" como el usuario
+### Error: "docker: command not found" como el usuario
 
-Docker Rootless no está instalado o no está en el PATH:
-
+Docker Rootless no está en el PATH. Agregar a `.bashrc`:
 ```bash
-sudo su - USUARIO -c '
-  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-  dockerd-rootless-setuptool.sh install
-  echo "export PATH=/usr/bin:\$PATH" >> ~/.bashrc
-'
+echo 'export PATH=/usr/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-### "kimi: command not found" después de instalar
-
-Verificar que `~/.local/bin` está en PATH:
+### Verificar Container UID correcto
 
 ```bash
-sudo su - USUARIO -c '
-  source $HOME/.local/bin/env
-  which kimi
-'
+SUBUID_BASE=$(grep "^$(whoami):" /etc/subuid | head -1 | cut -d: -f2)
+echo "Container UID: $((SUBUID_BASE + 999))"
 ```
 
 ---
 
-## Comparación con Setup Normal
+## Comparación de Approaches
 
-| Aspecto | Setup Normal (`/setup-vps`) | Fast Setup (`/fast-setup`) |
-|---------|----------------------------|---------------------------|
-| Sesión | Cambiar entre sudo → usuario | Todo desde sudo |
-| Kimi CLI | Usuario lo instala manual | Admin lo instala vía `su` |
-| WhatsApp Auth | Usuario corre `npm run auth` | Admin puede hacerlo remoto |
-| Ideal para | Setup manual detallado | Automatización, múltiples usuarios |
-
----
-
-## Notas de Seguridad
-
-- El admin puede ver la API key si la configura en paso 8
-- Considera dejar que el usuario configure `.env` para mayor seguridad
-- `chmod 700 /home/usuario` mantiene aislamiento entre usuarios
+| | `/setup-vps` | `/fast-setup` (esta skill) |
+|---|---|---|
+| Quién ejecuta | Admin con sudo | Admin con sudo |
+| Parte 1 | Configura sistema | **Sudo**: Docker, subuid, linger |
+| Parte 2 | Usuario hace manualmente | **Entra como usuario**: kimi, npm, repo |
+| Cambio de usuario | SSH manual | Automático con `su -` |
+| Ideal para | Setup manual cuidadoso | **Setup rápido automatizado** |

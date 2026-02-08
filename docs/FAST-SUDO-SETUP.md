@@ -1,249 +1,304 @@
-# Fast Sudo Setup - NanoKimi en una Sola Ejecución
+# Fast Sudo Setup - NanoKimi en Dos Fases
 
-**Para administradores que quieren configurar todo de una vez sin cambiar de usuario.**
+**Configura un usuario completo desde sudo: primero el sistema, luego entra como el usuario.**
 
-Esta guía es para quienes tienen acceso `sudo` y quieren preparar un usuario de NanoKimi completamente desde su sesión actual, sin tener que hacer `ssh` o `su` manualmente entre usuarios.
+Esta guía es para administradores que tienen acceso `sudo` y quieren preparar un usuario de NanoKimi sin tener que hacer SSH manual ni cambiar entre usuarios constantemente.
+
+El truco está en dividir el proceso en **dos fases claras**:
+1. **Fase Sudo** (como root): Docker, subuid/subgid, linger
+2. **Fase Usuario** (con `su - usuario`): Kimi, git, npm, etc.
 
 ---
 
-## ⚡ Comando Rápido (TL;DR)
+## ⚡ Comando Rápido (Todo en Uno)
 
 ```bash
-# Todo de una vez: crea usuario, instala docker, kimi, clona repo y deja listo
+# FASE 1: Como sudo - configuración de sistema
 sudo bash -c '
   USERNAME=nanokimi
   
-  # 1. Crear usuario
-  id $USERNAME &>/dev/null || useradd -m -r -s /bin/bash $USERNAME
+  # Crear usuario
+  id $USERNAME || useradd -m -r -s /bin/bash $USERNAME
   chmod 700 /home/$USERNAME
   
-  # 2. Docker Rootless (setup-vps básico)
-  apt-get update -qq && apt-get install -y -qq curl ca-certificates
+  # Docker
   curl -fsSL https://get.docker.com | sh
+  apt-get install -y docker-ce-rootless-extras
+  
+  # Subuid/subgid
   usermod --add-subuids 300000-365535 --add-subgids 300000-365535 $USERNAME
   loginctl enable-linger $USERNAME
   
-  # 3. Instalar Kimi CLI como el usuario
-  su - $USERNAME -c "curl -L code.kimi.com/install.sh | bash"
+  # Docker rootless como el usuario
+  su - $USERNAME -c "dockerd-rootless-setuptool.sh install" || true
   
-  # 4. Clonar repo y setup
-  su - $USERNAME -c "
-    source \$HOME/.local/bin/env
-    git clone https://github.com/1511170/nanokimi.git
-    cd nanokimi
-    npm install && npm run build
-    mkdir -p groups data store
-  "
-  
-  echo "✓ Listo! Usuario: $USERNAME"
-  echo "  su - $USERNAME -c \"cd nanokimi && npm run auth\""
+  echo "✓ Fase Sudo completa"
 '
+
+# FASE 2: Entrar como el usuario y hacer el resto
+sudo su - nanokimi << 'EOF'
+  # Instalar kimi (limpiar .local si es necesario)
+  [ -d "$HOME/.local" ] && [ "$(stat -c '%U' "$HOME/.local')" != "$(whoami)" ] && rm -rf "$HOME/.local"
+  curl -L code.kimi.com/install.sh | bash
+  source $HOME/.local/bin/env
+  
+  # Clonar y setup
+  git clone https://github.com/1511170/nanokimi.git
+  cd nanokimi
+  npm install && npm run build
+  mkdir -p groups data store logs
+  
+  # ACLs
+  SUBUID=$(grep "^$(whoami):" /etc/subuid | cut -d: -f2)
+  for d in groups data store; do
+    setfacl -R -m u:$((SUBUID+999)):rwx $d 2>/dev/null || true
+  done
+  
+  echo "✓ Fase Usuario completa"
+  echo "Ahora configura .env y corre: npm run auth"
+EOF
 ```
 
 ---
 
-## 📋 Paso a Paso Detallado
+## Paso a Paso Detallado
 
-### Paso 1: Crear el Usuario (como sudo)
+### FASE 1: Configuración de Sistema (como sudo)
+
+#### 1. Crear usuario
 
 ```bash
 USERNAME=nanokimi
 
 # Crear si no existe
-sudo id $USERNAME &>/dev/null || sudo useradd -m -r -s /bin/bash $USERNAME
+sudo id $USERNAME || sudo useradd -m -r -s /bin/bash $USERNAME
 sudo chmod 700 /home/$USERNAME
 ```
 
-### Paso 2: Configurar Docker Rootless
+#### 2. Instalar Docker
 
 ```bash
-# Instalar Docker
-sudo apt-get update
-sudo apt-get install -y curl ca-certificates
+# Instalar Docker CE
 sudo curl -fsSL https://get.docker.com | sh
+sudo apt-get install -y docker-ce-rootless-extras
+```
 
-# Asignar subuid/subgid
-sudo usermod --add-subuids 300000-365535 --add-subgids 300000-365535 $USERNAME
+#### 3. Configurar subuid/subgid
+
+```bash
+# Asignar rango si no tiene
+if ! sudo grep -q "^$USERNAME:" /etc/subuid 2>/dev/null; then
+  sudo usermod --add-subuids 300000-365535 --add-subgids 300000-365535 $USERNAME
+fi
+
+# Habilitar linger (necesario para systemd --user)
 sudo loginctl enable-linger $USERNAME
+```
 
-# Instalar Docker Rootless como el usuario
+#### 4. Instalar Docker Rootless
+
+```bash
+# Ejecutar como el usuario objetivo
 sudo su - $USERNAME -c 'dockerd-rootless-setuptool.sh install'
+
+# Verificar que funciona
+sudo su - $USERNAME -c 'docker ps'
 ```
 
-### Paso 3: Instalar Kimi CLI (sin cambiar de usuario)
+✅ **Fase 1 completa**. Ahora pasa a la Fase 2.
+
+---
+
+### FASE 2: Configuración como el Usuario
+
+**Ahora "entramos" como el usuario** con `sudo su - usuario`. Esto inicia una shell completamente nueva como ese usuario.
 
 ```bash
-sudo su - $USERNAME -c 'curl -L code.kimi.com/install.sh | bash'
+sudo su - $USERNAME
 ```
 
-Esto instala `kimi` en `/home/$USERNAME/.local/bin` y evita problemas de permisos.
+> 💡 Ahora estás ejecutando comandos **como el usuario objetivo**, no como root.
 
-### Paso 4: Preparar el Proyecto
+#### 5. Instalar Kimi CLI
 
 ```bash
-sudo su - $USERNAME -c '
-  source $HOME/.local/bin/env
-  git clone https://github.com/1511170/nanokimi.git
-  cd nanokimi
-  npm install
-  npm run build
-  mkdir -p groups data store logs
-'
+# Verificar/limpiar ~/.local si tiene malos permisos
+if [ -d "$HOME/.local" ] && [ "$(stat -c '%U' "$HOME/.local'" 2>/dev/null)" != "$(whoami)" ]; then
+  echo "Limpiando ~/.local..."
+  rm -rf "$HOME/.local"
+fi
+
+# Instalar kimi
+curl -L code.kimi.com/install.sh | bash
+source $HOME/.local/bin/env
+
+# Verificar
+which kimi
 ```
 
-### Paso 5: Configurar API Key
+#### 6. Clonar Repo y Setup
 
 ```bash
-# Opción A: El admin configura la API key
-read -s API_KEY
-sudo su - $USERNAME -c "echo \"MOONSHOT_API_KEY='$API_KEY'\" > nanokimi/.env"
+# Clonar
+git clone https://github.com/1511170/nanokimi.git
+cd nanokimi
 
-# Opción B: El usuario lo hace después
-# (más seguro, el admin no ve la key)
+# Dependencias y build
+npm install
+npm run build
+
+# Directorios necesarios
+mkdir -p groups data store logs
 ```
 
-### Paso 6: WhatsApp Auth (interactivo)
-
-El admin puede mostrar el QR sin hacer SSH:
+#### 7. Configurar ACLs
 
 ```bash
-sudo su - $USERNAME -c 'cd nanokimi && npm run auth'
-# Escanea el QR que aparece
+# Calcular Container UID (subuid_base + 999)
+SUBUID_BASE=$(grep "^$(whoami):" /etc/subuid | head -1 | cut -d: -f2)
+CONTAINER_UID=$((SUBUID_BASE + 999))
+
+# Aplicar ACLs para que el contenedor pueda escribir
+for dir in groups data store; do
+  setfacl -R -m u:$CONTAINER_UID:rwx "$dir"
+  setfacl -R -d -m u:$CONTAINER_UID:rwx "$dir"
+done
+
+echo "Container UID: $CONTAINER_UID"
 ```
 
-### Paso 7: Iniciar el Servicio
+#### 8. Configurar API Key
 
 ```bash
-# Como el usuario, iniciar el servicio
-sudo su - $USERNAME -c '
-  cd nanokimi
-  systemctl --user start docker
-  systemctl --user enable --now nanokimi
-'
+# Crear archivo .env
+echo "MOONSHOT_API_KEY='tu-api-key-aqui'" > .env
+```
 
-# Ver logs
-sudo su - $USERNAME -c 'tail -f nanokimi/logs/nanokimi.log'
+✅ **Fase 2 completa**. Ahora tienes:
+- Kimi CLI instalado
+- Repo clonado y compilado
+- Docker rootless funcionando
+- ACLs configuradas
+
+---
+
+## WhatsApp Auth (Interactivo)
+
+Puedes hacer el auth de WhatsApp sin salir de tu sesión sudo:
+
+```bash
+# Desde tu sesión sudo original:
+sudo su - nanokimi -c 'cd nanokimi && npm run auth'
+
+# Aparece el QR, lo escaneas con WhatsApp, listo.
+```
+
+O si ya hiciste `sudo su - nanokimi`:
+
+```bash
+cd nanokimi
+npm run auth
 ```
 
 ---
 
-## 🎯 Comparación: Setup Normal vs Fast Sudo
-
-| | Setup Normal | Fast Sudo Setup |
-|---|---|---|
-| **Fase 1** | `sudo kimi` → `/setup-vps usuario` | Todo en una línea |
-| **Cambio de usuario** | SSH manual o `su` | `su - usuario -c "..."` |
-| **Instalar kimi** | Usuario entra y ejecuta curl | Admin lo hace con `su -c` |
-| **WhatsApp Auth** | Usuario corre `npm run auth` | Admin puede hacerlo remoto |
-| **Ideal para** | VPS nuevos | Configurar múltiples usuarios rápido |
-
----
-
-## 🛠️ Script Automático
-
-Guarda esto como `fast-setup.sh`:
+## Iniciar el Servicio
 
 ```bash
-#!/bin/bash
-# Fast setup para NanoKimi - Ejecutar como sudo
-set -e
+# Opción A: Desde tu sesión sudo (sin cambiar de usuario)
+sudo su - nanokimi -c 'cd nanokimi && systemctl --user start nanokimi'
 
-USERNAME="${1:-nanokimi}"
-REPO="${2:-https://github.com/1511170/nanokimi.git}"
-
-echo "⚡ Fast Setup para: $USERNAME"
-
-# Crear usuario
-id "$USERNAME" &>/dev/null || useradd -m -r -s /bin/bash "$USERNAME"
-chmod 700 "/home/$USERNAME"
-
-# Docker
-curl -fsSL https://get.docker.com | sh 2>/dev/null || true
-usermod --add-subuids 300000-365535 --add-subgids 300000-365535 "$USERNAME"
-loginctl enable-linger "$USERNAME"
-
-# Kimi + Repo
-su - "$USERNAME" -c "
-  # Limpiar .local si tiene malos permisos
-  [ -d \"\$HOME/.local\" ] && [ \"\$(stat -c '%U' '\$HOME/.local')\" != '\$(whoami)' ] && rm -rf '\$HOME/.local'
-  
-  # Instalar kimi
-  curl -L code.kimi.com/install.sh | bash
-  source \$HOME/.local/bin/env
-  
-  # Clonar y preparar
-  git clone '$REPO' nanokimi
-  cd nanokimi
-  npm install && npm run build
-  mkdir -p groups data store logs
-"
-
-SUBUID_BASE=$(grep "^$USERNAME:" /etc/subuid | head -1 | cut -d: -f2)
-echo ""
-echo "✓ Setup completo para: $USERNAME"
-echo "  Container UID: $((SUBUID_BASE + 999))"
-echo "  Proyecto: /home/$USERNAME/nanokimi"
-echo ""
-echo "Próximos pasos:"
-echo "  1. Configurar API key: sudo su - $USERNAME -c 'echo MOONSHOT_API_KEY=xxx > nanokimi/.env'"
-echo "  2. WhatsApp auth:     sudo su - $USERNAME -c 'cd nanokimi && npm run auth'"
-echo "  3. Iniciar:           sudo su - $USERNAME -c 'cd nanokimi && systemctl --user start nanokimi'"
+# Opción B: Entrando como el usuario
+sudo su - nanokimi
+cd nanokimi
+systemctl --user start nanokimi
 ```
 
-Uso:
+Ver logs:
 ```bash
-sudo bash fast-setup.sh minuevo
+sudo su - nanokimi -c 'tail -f nanokimi/logs/nanokimi.log'
 ```
 
 ---
 
-## 🔑 Trucos Clave
+## ¿Por qué dividir en dos fases?
 
-### Ejecutar comandos como otro usuario sin cambiar de sesión
+| Fase | Comando | Qué hace | Por qué separado |
+|------|---------|----------|------------------|
+| **1 - Sudo** | `sudo ...` | Docker, subuid, linger | Requiere privilegios de root |
+| **2 - Usuario** | `sudo su - usuario` | Kimi, npm, git clone | No requiere root, mejor seguridad |
 
-```bash
-# Con su -
-sudo su - usuario -c "comando"
+**Ventajas de esta división:**
+- ✅ Claro qué necesita root y qué no
+- ✅ El usuario final "posee" todos sus archivos (no root)
+- ✅ Mejor auditoría de seguridad
+- ✅ Si algo falla en Fase 2, no afectó el sistema
 
-# Con sudo -u (sin login shell)
-sudo -u usuario bash -c "source \$HOME/.local/bin/env && kimi"
+---
 
-# Con variables de entorno
-sudo -iu usuario <<< "cd nanokimi && kimi"
-```
+## Comandos de Verificación
 
 ### Verificar que todo quedó bien
 
 ```bash
-# ¿Kimi está instalado?
-sudo su - usuario -c "which kimi"
-
-# ¿Docker rootless funciona?
-sudo su - usuario -c "docker ps"
-
-# ¿El repo existe?
-sudo ls -la /home/usuario/nanokimi
+# Como sudo, verificar estado del usuario
+sudo su - nanokimi -c '
+  echo "=== Usuario ===" && whoami && id
+  echo "=== Kimi ===" && which kimi && kimi --version 2>/dev/null
+  echo "=== Docker ===" && docker ps 2>/dev/null && echo "OK" || echo "Docker no activo"
+  echo "=== Proyecto ===" && ls -la ~/nanokimi/ | head -5
+  echo "=== Container UID ===" && echo $(($(grep "^$(whoami):" /etc/subuid | cut -d: -f2) + 999))
+'
 ```
 
 ---
 
-## ⚠️ Consideraciones de Seguridad
+## Troubleshooting
 
-1. **API Keys**: El ver la API key del usuario como admin puede ser un riesgo. Considera dejar que el usuario configure `.env`.
+### "cannot access $HOME/.local: Permission denied"
 
-2. **Historial de comandos**: Si pasas la API key por línea de comandos, quedará en el historial de bash del root.
+El directorio `~/.local` fue creado por otro usuario:
 
-3. **Permisos**: `chmod 700 /home/usuario` es crucial para mantener aislamiento entre usuarios.
+```bash
+sudo rm -rf /home/USUARIO/.local
+# Reintentar instalación de kimi
+```
+
+### "docker: command not found" como el usuario
+
+Docker Rootless no está en el PATH. Agregar a `.bashrc`:
+
+```bash
+echo 'export PATH=/usr/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Permisos en grupos/data/store
+
+Recalcular y re-aplicar ACLs:
+
+```bash
+sudo su - USUARIO -c '
+  cd nanokimi
+  SUBUID=$(grep "^$(whoami):" /etc/subuid | cut -d: -f2)
+  for d in groups data store; do
+    setfacl -R -m u:$((SUBUID+999)):rwx $d
+    setfacl -R -d -m u:$((SUBUID+999)):rwx $d
+  done
+'
+```
 
 ---
 
-## 💡 Cuándo Usar Esto
+## Skill Disponible
 
-✅ **Ideal para:**
-- Configurar múltiples usuarios rápidamente
-- Scripts de automatización
-- VPS donde tienes solo acceso root inicial
+Esta funcionalidad está disponible como skill en Kimi Code:
 
-❌ **No ideal para:**
-- Producción donde el admin no debe ver credenciales
-- Equipos compartidos donde se requiere separación estricta
+```
+/fast-setup [usuario] [repo-url]
+```
+
+La skill guía automáticamente las dos fases:
+1. Primero ejecuta todo lo que requiere sudo
+2. Luego hace `su - usuario` y completa la instalación
+3. Al final te dice exactamente qué comando usar para WhatsApp auth
