@@ -141,7 +141,13 @@ echo "  (subuid base $SUBUID_BASE + 999 para usuario 'node' uid 1000 dentro del 
 Después de configurar el usuario con esta skill, el flujo continúa:
 
 1. SSH como el nuevo usuario: `ssh USUARIO@tu-vps`
-2. Clonar NanoKimi: `git clone https://github.com/.../nanokimi.git`
-3. Entrar al directorio: `cd nanokimi`
-4. Iniciar Kimi: `kimi`
-5. Ejecutar: `/deploy`
+2. Instalar Kimi CLI:
+   ```bash
+   curl -L code.kimi.com/install.sh | bash
+   source $HOME/.local/bin/env
+   ```
+   > **Nota:** Si `kimi` no se encuentra después de la instalación, verifica que `~/.local` pertenezca al usuario actual (`ls -la ~ | grep .local`). En VPS multi-usuario, este directorio puede tener permisos incorrectos. Solución: `sudo chown -R $USER:$USER ~/.local`
+3. Clonar NanoKimi: `git clone https://github.com/.../nanokimi.git`
+4. Entrar al directorio: `cd nanokimi`
+5. Iniciar Kimi: `kimi`
+6. Ejecutar: `/deploy`
