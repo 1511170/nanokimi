@@ -65,7 +65,7 @@
 | Sistema Operativo | macOS 12+ | Ubuntu 22.04+ / Debian 12+ |
 | Node.js | 20+ | 20+ |
 | Docker | Docker Desktop | Docker Rootless |
-| Kimi Code | `npm install -g kimi-cli` | `pip install kimi-cli` |
+| Kimi Code | `npm install -g kimi-cli` | `curl -L code.kimi.com/install.sh \| bash` |
 | API Key | [Moonshot AI](https://platform.moonshot.cn) | [Moonshot AI](https://platform.moonshot.cn) |
 
 ---
@@ -122,6 +122,10 @@ La skill detecta automáticamente qué pasos faltan y solo configura lo necesari
 ```bash
 # Conectar como el usuario creado
 ssh nanokimi@tu-vps
+
+# Instalar Kimi Code (si no está instalado)
+curl -L code.kimi.com/install.sh | bash
+source $HOME/.local/bin/env
 
 # Clonar y desplegar
 git clone https://github.com/tu-usuario/nanokimi.git
@@ -425,6 +429,22 @@ systemctl --user stop nanokimi
 npm run auth
 systemctl --user start nanokimi
 ```
+
+### Error "kimi: command not found" tras instalar
+
+Si instalaste Kimi Code con `curl -L code.kimi.com/install.sh | bash` pero el comando `kimi` no se encuentra, puede ser un problema de permisos con `~/.local`:
+
+```bash
+# Verificar propietario de ~/.local
+ls -la ~ | grep .local
+
+# Si pertenece a otro usuario, corregir:
+sudo chown -R $USER:$USER ~/.local
+source $HOME/.local/bin/env
+kimi --version
+```
+
+Esto ocurre comúnmente en VPS con múltiples usuarios donde el directorio `~/.local` fue creado por otro usuario.
 
 ### El asistente no responde a mensajes
 

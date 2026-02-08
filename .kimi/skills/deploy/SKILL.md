@@ -21,6 +21,13 @@ echo "Home: $HOME"
 echo "Node: $(which node)"
 echo "Docker: $(which docker 2>/dev/null || echo 'not found')"
 
+# Check for common permission issues
+if [ -d "$HOME/.local" ] && [ "$(stat -c '%U' "$HOME/.local" 2>/dev/null)" != "$(whoami)" ]; then
+  echo "WARNING: $HOME/.local is owned by $(stat -c '%U' "$HOME/.local"), not $(whoami)"
+  echo "This may cause issues with kimi-cli installation. Fix with:"
+  echo "  sudo chown -R $(whoami):$(whoami) $HOME/.local"
+fi
+
 # Check subuid allocation
 SUBUID_LINE=$(grep "^$(whoami):" /etc/subuid | head -1)
 if [ -n "$SUBUID_LINE" ]; then

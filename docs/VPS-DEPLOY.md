@@ -42,6 +42,24 @@ setfacl -R -d -m u:$CONTAINER_UID:rwx groups data store  # default ACLs for new 
 
 ## Lessons Learned
 
+### Kimi CLI Installation Fails (Permission Denied on ~/.local)
+
+When using `curl -L code.kimi.com/install.sh | bash` to install Kimi CLI on a multi-user VPS, the installation may fail silently if `~/.local` was previously created by another user.
+
+**Symptom:** `kimi: command not found` after installation appears successful
+
+**Cause:** `~/.local` directory owned by wrong user
+
+**Fix:**
+```bash
+# Check ownership
+ls -la ~ | grep .local
+
+# Fix permissions
+sudo chown -R $USER:$USER ~/.local
+source $HOME/.local/bin/env
+```
+
 ### OAuth Tokens with Special Characters
 Tokens containing `#` get truncated by `export $(cat file | xargs)`. Fix: wrap values in single quotes in `.env` and use `set -a; . file; set +a` in the container entrypoint.
 
