@@ -1,5 +1,5 @@
 /**
- * IPC-based MCP Server for NanoClaw
+ * IPC-based MCP Server for NanoKimi
  * Writes messages and tasks to files for the host process to pick up
  */
 

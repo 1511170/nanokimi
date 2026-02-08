@@ -1,9 +1,9 @@
 ---
 name: customize
-description: Add new capabilities or modify NanoClaw behavior. Use when user wants to add channels (Telegram, Slack, email input), change triggers, add integrations, modify the router, or make any other customizations. This is an interactive skill that asks questions to understand what the user wants.
+description: Add new capabilities or modify NanoKimi behavior. Use when user wants to add channels (Telegram, Slack, email input), change triggers, add integrations, modify the router, or make any other customizations. This is an interactive skill that asks questions to understand what the user wants.
 ---
 
-# NanoClaw Customization
+# NanoKimi Customization
 
 This skill helps users add capabilities or modify behavior. Use AskUserQuestion to understand what they want before making changes.
 
@@ -24,7 +24,7 @@ This skill helps users add capabilities or modify behavior. Use AskUserQuestion 
 | `src/types.ts` | TypeScript interfaces |
 | `src/whatsapp-auth.ts` | Standalone WhatsApp authentication script |
 | `.mcp.json` | MCP server configuration (reference) |
-| `groups/CLAUDE.md` | Global memory/persona |
+| `groups/KIMI.md` | Global memory/persona |
 
 ## Common Customization Patterns
 
@@ -52,7 +52,7 @@ Questions to ask:
 Implementation:
 1. Add MCP server to the `mcpServers` config in `src/index.ts`
 2. Add tools to `allowedTools` array
-3. Document in `groups/CLAUDE.md`
+3. Document in `groups/KIMI.md`
 
 ### Changing Assistant Behavior
 
@@ -61,8 +61,8 @@ Questions to ask:
 - Apply to all groups or specific ones?
 
 Simple changes → edit `src/config.ts`
-Persona changes → edit `groups/CLAUDE.md`
-Per-group behavior → edit specific group's `CLAUDE.md`
+Persona changes → edit `groups/KIMI.md`
+Per-group behavior → edit specific group's `KIMI.md`
 
 ### Adding New Commands
 
@@ -92,8 +92,8 @@ Always tell the user:
 ```bash
 # Rebuild and restart
 npm run build
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl unload ~/Library/LaunchAgents/com.nanokimi.plist
+launchctl load ~/Library/LaunchAgents/com.nanokimi.plist
 ```
 
 ## Example Interaction

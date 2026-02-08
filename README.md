@@ -1,193 +1,508 @@
 <p align="center">
-  <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
+  <img src="assets/nanokimi-logo.png" alt="NanoKimi" width="400">
 </p>
 
 <p align="center">
-  My personal Claude assistant that runs securely in containers. Lightweight and built to be understood and customized for your own needs.
+  <strong>Tu asistente personal de Kimi AI que se ejecuta de forma segura en contenedores</strong>
 </p>
 
-## Why I Built This
+<p align="center">
+  <a href="#features">Características</a> •
+  <a href="#installation">Instalación</a> •
+  <a href="#usage">Uso</a> •
+  <a href="#architecture">Arquitectura</a> •
+  <a href="#security">Seguridad</a> •
+  <a href="#faq">FAQ</a>
+</p>
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an impressive project with a great vision. But I can't sleep well running software I don't understand with access to my life. OpenClaw has 52+ modules, 8 config management files, 45+ dependencies, and abstractions for 15 channel providers. Security is application-level (allowlists, pairing codes) rather than OS isolation. Everything runs in one Node process with shared memory.
+---
 
-NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes. One process. A handful of files. Agents run in actual Linux containers with filesystem isolation, not behind permission checks.
+## 🎯 ¿Qué es NanoKimi?
 
-## Quick Start
+**NanoKimi** es un asistente personal de IA basado en [Kimi Code](https://kimi.com) (de Moonshot AI) que se integra con **WhatsApp**. Diseñado con la filosofía "pequeño pero poderoso", ofrece:
 
-### macOS
+- 🤖 **IA de última generación** mediante el SDK de Kimi Agent
+- 💬 **Interfaz familiar** - usa WhatsApp desde tu teléfono
+- 🔒 **Seguridad por aislamiento** - cada conversación corre en su propio contenedor Docker
+- 🧠 **Memoria persistente** - recuerda contexto y preferencias por grupo
+- ⏰ **Tareas programadas** - automatiza recordatorios y reportes
+- 🛠️ **Personalizable** - modifica el código fácilmente para adaptarlo a tus necesidades
+
+> **Nota:** Este proyecto es un fork adaptado de [NanoClaw](https://github.com/gavrielc/nanoclaw), modificado para usar Kimi Code en lugar de Claude Code.
+
+---
+
+## ✨ Características
+
+### Core
+- **📱 WhatsApp como interfaz** - Envía mensajes a tu asistente desde cualquier lugar
+- **👥 Grupos aislados** - Cada grupo de WhatsApp tiene su propio contexto y memoria
+- **🧠 Memoria jerárquica**
+  - Memoria global (`groups/KIMI.md`) - compartida entre todos los grupos
+  - Memoria por grupo (`groups/{nombre}/KIMI.md`) - específica de cada conversación
+- **⏰ Tareas programadas** - Crea recordatorios recurrentes o de una sola vez
+- **🌐 Acceso web** - Búsqueda y navegación integrada
+- **🔧 Herramientas integradas** - Bash, edición de archivos, búsqueda, glob, grep
+
+### Seguridad
+- **🛡️ Aislamiento por contenedores** - Cada ejecución corre en un contenedor Docker fresco
+- **📁 Acceso limitado** - Solo los directorios montados explícitamente son visibles
+- **🔐 Credenciales protegidas** - Las API keys nunca se exponen a los agentes
+- **👤 Ejecución no-root** - Los contenedores corren como usuario `node` (UID 1000)
+
+### Integraciones (via Skills)
+- **📧 Gmail** (`/add-gmail`) - Lee y envía emails
+- **🔍 Parallel AI** (`/add-parallel`) - Investigación web avanzada
+- **🎙️ Transcripción de voz** (`/add-voice-transcription`) - Convierte notas de voz a texto
+- **🐦 X/Twitter** (`/x-integration`) - Publica y gestiona tweets
+
+---
+
+## 📋 Requisitos
+
+| Requisito | macOS | Linux VPS |
+|-----------|-------|-----------|
+| Sistema Operativo | macOS 12+ | Ubuntu 22.04+ / Debian 12+ |
+| Node.js | 20+ | 20+ |
+| Docker | Docker Desktop | Docker Rootless |
+| Kimi Code | `npm install -g kimi-cli` | `pip install kimi-cli` |
+| API Key | [Moonshot AI](https://platform.moonshot.cn) | [Moonshot AI](https://platform.moonshot.cn) |
+
+---
+
+## 🚀 Instalación
+
+### Opción 1: macOS (Desarrollo Local)
 
 ```bash
-git clone https://github.com/gavrielc/nanoclaw.git
-cd nanoclaw
-claude
+# 1. Clonar el repositorio
+git clone https://github.com/tu-usuario/nanokimi.git
+cd nanokimi
+
+# 2. Iniciar Kimi Code
+kimi
+
+# 3. En la interfaz de Kimi Code, ejecutar:
+/setup
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, Docker, authentication, container setup, service configuration.
+El comando `/setup` guiará el proceso completo:
+- Verificación de dependencias
+- Configuración de Docker
+- Autenticación con Kimi (OAuth o API Key)
+- Autenticación de WhatsApp (escanea QR)
+- Construcción del contenedor
+- Configuración del servicio launchd
 
-### Linux VPS
+### Opción 2: Linux VPS (Producción)
 
-Two-phase setup with proper user isolation:
+#### Fase 1: Administrador (con sudo)
 
 ```bash
-# Phase 1: Admin creates isolated app user with Docker Rootless
-sudo bash scripts/setup-vps.sh
-
-# Phase 2: App user deploys NanoClaw
-ssh <user>@<host>
-git clone <repo> nanoclaw && cd nanoclaw
-npx claude
-# Then run /deploy
+# En el VPS como usuario con privilegios sudo
+curl -fsSL https://raw.githubusercontent.com/tu-usuario/nanokimi/main/scripts/setup-vps.sh | sudo bash
 ```
 
-See [docs/VPS-DEPLOY.md](docs/VPS-DEPLOY.md) for details.
+Esto creará:
+- Un usuario dedicado (ej: `nanokimi`)
+- Docker Rootless (sin necesidad de root)
+- Estructura de directorios
 
-## Philosophy
+#### Fase 2: Usuario de la aplicación
 
-**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Claude Code walk you through it.
+```bash
+# Conectar como el usuario creado
+ssh nanokimi@tu-vps
 
-**Secure by isolation.** Agents run in Docker containers. They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+# Clonar y desplegar
+git clone https://github.com/tu-usuario/nanokimi.git
+cd nanokimi
 
-**Built for one user.** This isn't a framework. It's working software that fits my exact needs. You fork it and have Claude Code make it match your exact needs.
-
-**Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that this is safe.
-
-**AI-native.** No installation wizard; Claude Code guides setup. No monitoring dashboard; ask Claude what's happening. No debugging tools; describe the problem, Claude fixes it.
-
-**Skills over features.** Contributors shouldn't add features (e.g. support for Telegram) to the codebase. Instead, they contribute [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
-
-**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters. A bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is (IMO) the best harness available.
-
-## What It Supports
-
-- **WhatsApp I/O** - Message Claude from your phone
-- **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted
-- **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
-- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
-- **Web access** - Search and fetch content
-- **Container isolation** - Agents sandboxed in Docker containers (macOS and Linux)
-- **VPS deployment** - Run on a Linux server with Docker Rootless, systemd, and proper user isolation
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
-
-## Usage
-
-Talk to your assistant with the trigger word (default: `@Andy`):
-
-```
-@Andy send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
-@Andy review the git history for the past week each Friday and update the README if there's drift
-@Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
+# Iniciar Kimi Code y ejecutar el deploy
+kimi
+# Luego ejecutar: /deploy
 ```
 
-From the main channel (your self-chat), you can manage groups and tasks:
-```
-@Andy list all scheduled tasks across groups
-@Andy pause the Monday briefing task
-@Andy join the Family Chat group
-```
+El comando `/deploy` configurará:
+- Docker Rootless
+- Variables de entorno
+- Construcción del contenedor
+- Servicio systemd --user
+- Inicio automático
 
-## Customizing
+---
 
-There are no configuration files to learn. Just tell Claude Code what you want:
+## ⚙️ Configuración
 
-- "Change the trigger word to @Bob"
-- "Remember in the future to make responses shorter and more direct"
-- "Add a custom greeting when I say good morning"
-- "Store conversation summaries weekly"
+### Variables de Entorno (.env)
 
-Or run `/customize` for guided changes.
+```bash
+# Opción 1: Token de Kimi Code (recomendado para uso personal)
+# Obtén tu token ejecutando: kimi setup-token
+MOONSHOT_API_KEY='tu-token-de-kimi-o-api-key'
 
-The codebase is small enough that Claude can safely modify it.
+# Opción 2: API Key directa de Moonshot AI
+# MOONSHOT_API_KEY='sk-...'
 
-## Contributing
+# Nombre del asistente (trigger word)
+ASSISTANT_NAME=Andy
 
-**Don't add features. Add skills.**
-
-If you want to add Telegram support, don't create a PR that adds Telegram alongside WhatsApp. Instead, contribute a skill file (`.claude/skills/add-telegram/SKILL.md`) that teaches Claude Code how to transform a NanoClaw installation to use Telegram.
-
-Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
-
-### RFS (Request for Skills)
-
-Skills we'd love to see:
-
-**Communication Channels**
-- `/add-telegram` - Add Telegram as channel. Should give the user option to replace WhatsApp or add as additional channel. Also should be possible to add it as a control channel (where it can trigger actions) or just a channel that can be used in actions triggered elsewhere
-- `/add-slack` - Add Slack
-- `/add-discord` - Add Discord
-
-**Platform Support**
-- `/setup-windows` - Windows via WSL2 + Docker
-
-**Session Management**
-- `/add-clear` - Add a `/clear` command that compacts the conversation (summarizes context while preserving critical information in the same session). Requires figuring out how to trigger compaction programmatically via the Claude Agent SDK.
-
-## Requirements
-
-- macOS or Linux
-- Node.js 20+
-- [Claude Code](https://claude.ai/download)
-- [Docker](https://docker.com/products/docker-desktop) (macOS: Docker Desktop, Linux: Docker Rootless via `scripts/setup-vps.sh`)
-
-## Architecture
-
-```
-WhatsApp (baileys) --> SQLite --> Polling loop --> Docker container (Claude Agent SDK) --> Response
+# Configuración opcional
+CONTAINER_IMAGE=nanokimi-agent:latest
+CONTAINER_TIMEOUT=300000
+LOG_LEVEL=info
 ```
 
-Single Node.js process. Agents execute in isolated Docker containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
+### Estructura de Directorios
 
-Key files:
-- `src/index.ts` - Main app: WhatsApp connection, routing, IPC
-- `src/container-runner.ts` - Spawns agent containers
-- `src/task-scheduler.ts` - Runs scheduled tasks
-- `src/db.ts` - SQLite operations
-- `groups/*/CLAUDE.md` - Per-group memory
+```
+nanokimi/
+├── groups/
+│   ├── KIMI.md                 # Memoria global
+│   └── main/                   # Tu chat personal (admin)
+│       ├── KIMI.md             # Memoria del canal principal
+│       └── logs/
+├── src/                        # Código fuente
+├── container/                  # Configuración Docker
+│   ├── Dockerfile
+│   └── agent-runner/           # Código que corre dentro del contenedor
+├── .kimi/skills/               # Skills de configuración
+│   ├── setup/SKILL.md
+│   ├── deploy/SKILL.md
+│   ├── customize/SKILL.md
+│   └── debug/SKILL.md
+├── data/                       # Estado de la aplicación
+│   ├── sessions.json           # IDs de sesión por grupo
+│   ├── registered_groups.json  # Grupos registrados
+│   └── ipc/                    # Comunicación inter-proceso
+├── store/                      # Base de datos SQLite
+│   └── messages.db
+└── logs/                       # Logs de ejecución
+    └── nanokimi.log
+```
 
-### Deployment Options
+---
 
-| Platform | Container Runtime | Service Manager | Setup |
-|----------|-------------------|-----------------|-------|
-| macOS | Docker Desktop | launchd | `/setup` |
-| Linux VPS | Docker Rootless | systemd --user | `scripts/setup-vps.sh` + `/deploy` |
+## 💬 Uso
 
-## FAQ
+### Interactuar con el Asistente
 
-**Why WhatsApp and not Telegram/Signal/etc?**
+Desde cualquier grupo de WhatsApp registrado, usa el trigger word (por defecto `@Andy`):
 
-Because I use WhatsApp. Fork it and run a skill to change it. That's the whole point.
+```
+@Andy ¿Cuál es el clima hoy?
 
-**Why Docker?**
+@Andy resume los emails que recibí esta mañana
 
-Docker provides cross-platform support (macOS and Linux), a large ecosystem, and mature tooling. On macOS, Docker Desktop uses a lightweight Linux VM. On Linux, Docker Rootless runs without root privileges for better security.
+@Andy programa un recordatorio cada lunes a las 9am para revisar métricas
+```
 
-**Can I run this on Linux?**
+### Comandos de Administración (Canal Principal)
 
-Yes. Run `scripts/setup-vps.sh` as admin to set up the user and Docker Rootless, then run `/deploy` as the app user. See [docs/VPS-DEPLOY.md](docs/VPS-DEPLOY.md).
+Desde tu chat personal (main channel), puedes gestionar todo:
 
-**Is this secure?**
+```
+@Andy añade grupo "Equipo de Trabajo"
+@Andy elimina grupo "Equipo de Trabajo"
+@Andy lista grupos
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. On Linux VPS, Docker Rootless adds another layer: the Docker daemon runs without root, and UID remapping isolates container users from host users. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
+@Andy lista todas las tareas programadas
+@Andy pausa tarea [id]
+@Andy reanuda tarea [id]
+@Andy cancela tarea [id]
 
-**Why no configuration files?**
+@Andy recuerda que prefiero modo oscuro
+@Andy recuerda globalmente que soy desarrollador
+```
 
-We don't want configuration sprawl. Every user should customize it to so that the code matches exactly what they want rather than configuring a generic system. If you like having config files, tell Claude to add them.
+### Memoria y Contexto
 
-**How do I debug issues?**
+- **Memoria de grupo**: El asistente recuerda conversaciones previas dentro del mismo grupo
+- **Memoria global**: Información compartida entre todos los grupos (editable solo desde main)
+- **Archivos**: Puedes crear y editar archivos `.md` en el directorio del grupo para referencia
 
-Ask Claude Code. "Why isn't the scheduler running?" "What's in the recent logs?" "Why did this message not get a response?" That's the AI-native approach.
+---
 
-**Why isn't the setup working for me?**
+## 🏗️ Arquitectura
 
-I don't know. Run `claude`, then run `/debug`. If claude finds an issue that is likely affecting other users, open a PR to modify the setup SKILL.md.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         HOST (macOS / Linux)                         │
+│                      (Proceso Node.js Principal)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────┐                     ┌────────────────────┐        │
+│  │  WhatsApp    │────────────────────▶│   Base de Datos    │        │
+│  │  (baileys)   │◀────────────────────│   SQLite           │        │
+│  └──────────────┘   almacenar/enviar  └─────────┬──────────┘        │
+│                                                  │                   │
+│         ┌────────────────────────────────────────┘                   │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌───────────────┐  │
+│  │  Bucle de        │    │  Planificador    │    │  Watcher IPC  │  │
+│  │  Mensajes        │    │  (tareas)        │    │  (archivos)   │  │
+│  │  (poll SQLite)   │    │                  │    │               │  │
+│  └────────┬─────────┘    └────────┬─────────┘    └───────────────┘  │
+│           │                       │                                  │
+│           └───────────┬───────────┘                                  │
+│                       │ spawnea contenedor                           │
+│                       ▼                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                    CONTENEDOR DOCKER (aislado)                        │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    AGENT RUNNER                               │   │
+│  │                                                                │   │
+│  │  Directorio de trabajo: /workspace/group (montado del host)   │   │
+│  │  Montajes de volúmenes:                                        │   │
+│  │    • groups/{nombre}/ → /workspace/group                       │   │
+│  │    • groups/global/ → /workspace/global/ (solo no-main)        │   │
+│  │    • data/sessions/{group}/.kimi/ → /home/node/.kimi/          │   │
+│  │                                                                │   │
+│  │  Herramientas disponibles:                                     │   │
+│  │    • Bash, Read, Write, Edit, Glob, Grep                       │   │
+│  │    • WebSearch, WebFetch                                       │   │
+│  │    • mcp__nanokimi__* (tareas programadas)                     │   │
+│  │                                                                │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-**What changes will be accepted into the codebase?**
+### Flujo de un Mensaje
 
-Security fixes, bug fixes, and clear improvements to the base configuration. That's it.
+1. **Recepción**: Baileys recibe el mensaje de WhatsApp Web
+2. **Almacenamiento**: Se guarda en SQLite con metadatos
+3. **Polling**: El bucle principal revisa nuevos mensajes cada 2 segundos
+4. **Enrutamiento**: Se verifica si el grupo está registrado y si tiene el trigger
+5. **Contexto**: Se recopila el historial de conversación
+6. **Ejecución**: Se spawnea un contenedor Docker con el Kimi Agent SDK
+7. **Respuesta**: El agente procesa y genera una respuesta
+8. **Envío**: La respuesta se envía por WhatsApp
 
-Everything else (new capabilities, OS compatibility, hardware support, enhancements) should be contributed as skills.
+---
 
-This keeps the base system minimal and lets every user customize their installation without inheriting features they don't want.
+## 🔒 Seguridad
 
-## License
+### Modelo de Amenazas
+
+| Componente | Nivel de Confianza | Mitigación |
+|------------|-------------------|------------|
+| Grupo Principal | ✅ Confiable | Chat personal, control total |
+| Otros Grupos | ⚠️ No confiable | Aislamiento por contenedor |
+| Agentes | 🔒 Sandboxed | Docker, solo montajes explícitos |
+| Mensajes WhatsApp | ⚠️ Input del usuario | Validación de trigger, escaping |
+
+### Características de Seguridad
+
+- **Aislamiento de contenedores**: Cada ejecución es un contenedor fresco (`--rm`)
+- **Usuario no privilegiado**: El contenedor corre como `node` (UID 1000), no root
+- **Montajes limitados**: Solo directorios explícitamente permitidos son visibles
+- **Bash seguro**: Los comandos se ejecutan dentro del contenedor, nunca en el host
+- **Credenciales filtradas**: Solo `MOONSHOT_API_KEY` se monta en el contenedor
+- **Validación de rutas**: Se resuelven symlinks antes de montar (previene traversal)
+
+### Permisos de Grupos
+
+| Capacidad | Grupo Principal | Otros Grupos |
+|-----------|----------------|--------------|
+| Enviar mensajes a su chat | ✅ | ✅ |
+| Enviar mensajes a otros chats | ✅ | ❌ |
+| Programar tareas para sí | ✅ | ✅ |
+| Programar tareas para otros | ✅ | ❌ |
+| Ver todas las tareas | ✅ | Solo propias |
+| Escribir memoria global | ✅ | ❌ |
+| Gestionar otros grupos | ✅ | ❌ |
+
+Para más detalles, ver [docs/SECURITY.md](docs/SECURITY.md).
+
+---
+
+## 🛠️ Personalización
+
+### Cambiar el Trigger Word
+
+Edita `src/config.ts`:
+
+```typescript
+export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Bob';
+```
+
+O usa la variable de entorno:
+
+```bash
+ASSISTANT_NAME=Bob npm start
+```
+
+### Añadir Montajes Personalizados
+
+Para dar acceso a directorios adicionales (ej: tu vault de Obsidian), edita `data/registered_groups.json`:
+
+```json
+{
+  "1234567890@g.us": {
+    "name": "Mi Vault",
+    "folder": "mi-vault",
+    "trigger": "@Andy",
+    "containerConfig": {
+      "additionalMounts": [
+        {
+          "hostPath": "/home/usuario/obsidian-vault",
+          "containerPath": "vault",
+          "readonly": false
+        }
+      ]
+    }
+  }
+}
+```
+
+### Usar Skills
+
+Las skills son guías que Kimi Code usa para modificar el código:
+
+```
+/setup       # Configuración inicial (macOS)
+/deploy      # Despliegue en VPS (Linux)
+/customize   # Cambios personalizados
+/debug       # Solución de problemas
+
+/add-gmail                  # Integración con Gmail
+/add-parallel               # Investigación web avanzada
+/add-voice-transcription    # Transcripción de notas de voz
+/x-integration             # Integración con X/Twitter
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### El servicio no responde
+
+```bash
+# macOS
+launchctl list | grep nanokimi
+
+# Linux
+systemctl --user status nanokimi
+
+# Ver logs
+tail -f logs/nanokimi.log
+```
+
+### Error "Docker not running"
+
+```bash
+# macOS - Abre Docker Desktop
+open -a Docker
+
+# Linux
+systemctl --user start docker
+```
+
+### WhatsApp QR expirado
+
+```bash
+# Detener servicio, regenerar QR, reiniciar
+# macOS
+launchctl unload ~/Library/LaunchAgents/com.nanokimi.plist
+npm run auth
+launchctl load ~/Library/LaunchAgents/com.nanokimi.plist
+
+# Linux
+systemctl --user stop nanokimi
+npm run auth
+systemctl --user start nanokimi
+```
+
+### El asistente no responde a mensajes
+
+1. Verifica que el grupo esté registrado: `cat data/registered_groups.json`
+2. Comprueba que estés usando el trigger correcto (`@Andy` por defecto)
+3. Revisa los logs: `tail -100 logs/nanokimi.log | grep -i error`
+
+### Problemas de sesión (no recuerda conversación)
+
+1. Verifica `data/sessions.json`
+2. Comprueba que el montaje sea a `/home/node/.kimi/` (no `/root/.kimi/`)
+
+Para más soluciones, ejecuta `/debug` en Kimi Code.
+
+---
+
+## 🤝 Contribuir
+
+### Filosofía
+
+**No añadas características. Añade skills.**
+
+En lugar de modificar el código base para añadir soporte de Telegram, crea una skill `.kimi/skills/add-telegram/SKILL.md` que transforme una instalación existente. Esto mantiene el código base limpio y cada usuario obtiene exactamente lo que necesita.
+
+### Qué aceptamos
+
+- ✅ Fixes de seguridad
+- ✅ Corrección de bugs
+- ✅ Mejoras claras a la configuración base
+
+### Qué NO aceptamos
+
+- ❌ Nuevas integraciones en el código base (usar skills)
+- ❌ Soporte para múltiples plataformas en el core
+- ❌ Características que aumenten la complejidad
+
+### Cómo contribuir una skill
+
+1. Crea un directorio en `.kimi/skills/{nombre-skill}/`
+2. Escribe `SKILL.md` con instrucciones paso a paso
+3. Incluye ejemplos de código y troubleshooting
+4. Abre un PR
+
+---
+
+## 📚 Documentación Adicional
+
+- [docs/SPEC.md](docs/SPEC.md) - Especificación técnica completa
+- [docs/SECURITY.md](docs/SECURITY.md) - Modelo de seguridad
+- [docs/VPS-DEPLOY.md](docs/VPS-DEPLOY.md) - Guía de despliegue en VPS
+- [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) - Decisiones de arquitectura
+
+---
+
+## ❓ FAQ
+
+**¿Por qué WhatsApp y no Telegram/Signal/etc?**
+
+Porque es lo que uso. Haz fork y añade tu plataforma preferida como skill. Ese es el punto.
+
+**¿Por qué Docker?**
+
+Proporciona soporte multiplataforma (macOS y Linux), un ecosistema grande y herramientas maduras. En Linux VPS, Docker Rootless añade seguridad ejecutando sin privilegios root.
+
+**¿Puedo ejecutar esto en Windows?**
+
+No nativamente, pero puedes usar WSL2. Considera contribuir una skill `/setup-windows`.
+
+**¿Es seguro?**
+
+Los agentes corren en contenedores, no detrás de permisos a nivel de aplicación. Solo pueden acceder a directorios explícitamente montados. En VPS Linux, Docker Rootless añade otra capa de seguridad.
+
+**¿Por qué no hay archivos de configuración?**
+
+Queremos evitar la proliferación de configuraciones. Cada usuario debería personalizar el código para que coincida exactamente con lo que quiere, en lugar de configurar un sistema genérico. Si quieres archivos de configuración, dile a Kimi que los añada.
+
+**¿Cómo depuro problemas?**
+
+Pregúntale a Kimi Code. "¿Por qué no funciona el planificador?" "¿Qué hay en los logs recientes?" "¿Por qué este mensaje no obtuvo respuesta?" Ese es el enfoque nativo de IA.
+
+---
+
+## 📄 Licencia
 
 MIT
+
+---
+
+<p align="center">
+  Hecho con ❤️ y contenedores
+</p>

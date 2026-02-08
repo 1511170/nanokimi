@@ -1,13 +1,13 @@
 ---
 name: setup
-description: Run initial NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclaw", or first-time setup requests.
+description: Run initial NanoKimi setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanokimi", or first-time setup requests.
 ---
 
-# NanoClaw Setup
+# NanoKimi Setup
 
 Run all commands automatically. Only pause when user action is required (scanning QR codes).
 
-**UX Note:** When asking the user questions, prefer using the `AskUserQuestion` tool instead of just outputting text. This integrates with Claude's built-in question/answer system for a better experience.
+**UX Note:** When asking the user questions, prefer using the `AskUserQuestion` tool instead of just outputting text. This integrates with Kimi's built-in question/answer system for a better experience.
 
 ## 1. Install Dependencies
 
@@ -39,7 +39,7 @@ Tell the user:
 **If Apple Container is already installed:** Continue to Section 3.
 
 **If Apple Container is NOT installed:** Ask the user:
-> NanoClaw needs a container runtime for isolated agent execution. You have two options:
+> NanoKimi needs a container runtime for isolated agent execution. You have two options:
 >
 > 1. **Apple Container** (default) - macOS-native, lightweight, designed for Apple silicon
 > 2. **Docker** - Cross-platform, widely used, works on macOS and Linux
@@ -64,7 +64,7 @@ container system start
 container --version
 ```
 
-**Note:** NanoClaw automatically starts the Apple Container system when it launches, so you don't need to start it manually after reboots.
+**Note:** NanoKimi automatically starts the Apple Container system when it launches, so you don't need to start it manually after reboots.
 
 #### Option B: Docker
 
@@ -73,26 +73,26 @@ Tell the user:
 
 **Use the `/convert-to-docker` skill** to convert the codebase to Docker, then continue to Section 3.
 
-## 3. Configure Claude Authentication
+## 3. Configure Kimi Authentication
 
 Ask the user:
-> Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
+> Do you want to use your **Kimi subscription** (Pro/Max) or a **Moonshot AI API key**?
 
-### Option 1: Claude Subscription (Recommended)
+### Option 1: Kimi Subscription (Recommended)
 
 Tell the user:
 > Open another terminal window and run:
 > ```
-> claude setup-token
+> kimi login
 > ```
 > A browser window will open for you to log in. Once authenticated, the token will be displayed in your terminal. Either:
 > 1. Paste it here and I'll add it to `.env` for you, or
-> 2. Add it to `.env` yourself as `CLAUDE_CODE_OAUTH_TOKEN=<your-token>`
+> 2. Add it to `.env` yourself as `MOONSHOT_API_KEY=<your-token>`
 
 If they give you the token, add it to `.env`:
 
 ```bash
-echo "CLAUDE_CODE_OAUTH_TOKEN=<token>" > .env
+echo "MOONSHOT_API_KEY=<token>" > .env
 ```
 
 ### Option 2: API Key
@@ -101,39 +101,39 @@ Ask if they have an existing key to copy or need to create one.
 
 **Copy existing:**
 ```bash
-grep "^ANTHROPIC_API_KEY=" /path/to/source/.env > .env
+grep "^MOONSHOT_API_KEY=" /path/to/source/.env > .env
 ```
 
 **Create new:**
 ```bash
-echo 'ANTHROPIC_API_KEY=' > .env
+echo 'MOONSHOT_API_KEY=' > .env
 ```
 
-Tell the user to add their key from https://console.anthropic.com/
+Tell the user to add their key from https://platform.moonshot.cn/
 
 **Verify:**
 ```bash
-KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
+KEY=$(grep "^MOONSHOT_API_KEY=" .env | cut -d= -f2)
 [ -n "$KEY" ] && echo "API key configured: ${KEY:0:10}...${KEY: -4}" || echo "Missing"
 ```
 
 ## 4. Build Container Image
 
-Build the NanoClaw agent container:
+Build the NanoKimi agent container:
 
 ```bash
 ./container/build.sh
 ```
 
-This creates the `nanoclaw-agent:latest` image with Node.js, Chromium, Claude Code CLI, and agent-browser.
+This creates the `nanokimi-agent:latest` image with Node.js, Chromium, Kimi Code CLI, and agent-browser.
 
 Verify the build succeeded by running a simple test (this auto-detects which runtime you're using):
 
 ```bash
 if which docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  echo '{}' | docker run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+  echo '{}' | docker run -i --entrypoint /bin/echo nanokimi-agent:latest "Container OK" || echo "Container build failed"
 else
-  echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+  echo '{}' | container run -i --entrypoint /bin/echo nanokimi-agent:latest "Container OK" || echo "Container build failed"
 fi
 ```
 
@@ -168,7 +168,7 @@ This step configures three things at once: the trigger word, the main channel ty
 Ask the user:
 > What trigger word do you want to use? (default: `Andy`)
 >
-> In group chats, messages starting with `@TriggerWord` will be sent to Claude.
+> In group chats, messages starting with `@TriggerWord` will be sent to Kimi.
 > In your main channel (and optionally solo chats), no prefix is needed — all messages are processed.
 
 Store their choice for use in the steps below.
@@ -183,7 +183,7 @@ Store their choice for use in the steps below.
 > - Can see messages from ALL other registered groups
 > - Can manage and delete tasks across all groups
 > - Can write to global memory that all groups can read
-> - Has read-write access to the entire NanoClaw project
+> - Has read-write access to the entire NanoKimi project
 >
 > **Recommendation:** Use your personal "Message Yourself" chat or a solo WhatsApp group as your main channel. This ensures only you have admin control.
 >
@@ -196,7 +196,7 @@ Store their choice for use in the steps below.
 
 If they choose option 3, ask a follow-up:
 
-> You've chosen a group with other people. This means everyone in that group will have admin privileges over NanoClaw.
+> You've chosen a group with other people. This means everyone in that group will have admin privileges over NanoKimi.
 >
 > Are you sure you want to proceed? The other members will be able to:
 > - Read messages from your other registered chats
@@ -276,17 +276,17 @@ mkdir -p groups/main/logs
 ## 7. Configure External Directory Access (Mount Allowlist)
 
 Ask the user:
-> Do you want the agent to be able to access any directories **outside** the NanoClaw project?
+> Do you want the agent to be able to access any directories **outside** the NanoKimi project?
 >
-> Examples: Git repositories, project folders, documents you want Claude to work on.
+> Examples: Git repositories, project folders, documents you want Kimi to work on.
 >
 > **Note:** This is optional. Without configuration, agents can only access their own group folders.
 
 If **no**, create an empty allowlist to make this explicit:
 
 ```bash
-mkdir -p ~/.config/nanoclaw
-cat > ~/.config/nanoclaw/mount-allowlist.json << 'EOF'
+mkdir -p ~/.config/nanokimi
+cat > ~/.config/nanokimi/mount-allowlist.json << 'EOF'
 {
   "allowedRoots": [],
   "blockedPatterns": [],
@@ -329,13 +329,13 @@ Ask the user:
 Create the allowlist file based on their answers:
 
 ```bash
-mkdir -p ~/.config/nanoclaw
+mkdir -p ~/.config/nanokimi
 ```
 
 Then write the JSON file. Example for a user who wants `~/projects` (read-write) and `~/docs` (read-only) with non-main read-only:
 
 ```bash
-cat > ~/.config/nanoclaw/mount-allowlist.json << 'EOF'
+cat > ~/.config/nanokimi/mount-allowlist.json << 'EOF'
 {
   "allowedRoots": [
     {
@@ -358,7 +358,7 @@ EOF
 Verify the file:
 
 ```bash
-cat ~/.config/nanoclaw/mount-allowlist.json
+cat ~/.config/nanokimi/mount-allowlist.json
 ```
 
 Tell the user:
@@ -369,7 +369,7 @@ Tell the user:
 > **Security notes:**
 > - Sensitive paths (`.ssh`, `.gnupg`, `.aws`, credentials) are always blocked
 > - This config file is stored outside the project, so agents cannot modify it
-> - Changes require restarting the NanoClaw service
+> - Changes require restarting the NanoKimi service
 >
 > To grant a group access to a directory, add it to their config in `data/registered_groups.json`:
 > ```json
@@ -389,13 +389,13 @@ NODE_PATH=$(which node)
 PROJECT_PATH=$(pwd)
 HOME_PATH=$HOME
 
-cat > ~/Library/LaunchAgents/com.nanoclaw.plist << EOF
+cat > ~/Library/LaunchAgents/com.nanokimi.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.nanoclaw</string>
+    <string>com.nanokimi</string>
     <key>ProgramArguments</key>
     <array>
         <string>${NODE_PATH}</string>
@@ -415,9 +415,9 @@ cat > ~/Library/LaunchAgents/com.nanoclaw.plist << EOF
         <string>${HOME_PATH}</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>${PROJECT_PATH}/logs/nanoclaw.log</string>
+    <string>${PROJECT_PATH}/logs/nanokimi.log</string>
     <key>StandardErrorPath</key>
-    <string>${PROJECT_PATH}/logs/nanoclaw.error.log</string>
+    <string>${PROJECT_PATH}/logs/nanokimi.error.log</string>
 </dict>
 </plist>
 EOF
@@ -432,12 +432,12 @@ Build and start the service:
 ```bash
 npm run build
 mkdir -p logs
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl load ~/Library/LaunchAgents/com.nanokimi.plist
 ```
 
 Verify it's running:
 ```bash
-launchctl list | grep nanoclaw
+launchctl list | grep nanokimi
 ```
 
 ## 9. Test
@@ -449,16 +449,16 @@ Tell the user (using the assistant name they configured):
 
 Check the logs:
 ```bash
-tail -f logs/nanoclaw.log
+tail -f logs/nanokimi.log
 ```
 
 The user should receive a response in WhatsApp.
 
 ## Troubleshooting
 
-**Service not starting**: Check `logs/nanoclaw.error.log`
+**Service not starting**: Check `logs/nanokimi.error.log`
 
-**Container agent fails with "Claude Code process exited with code 1"**:
+**Container agent fails with "Kimi Code process exited with code 1**":
 - Ensure the container runtime is running:
   - Apple Container: `container system start`
   - Docker: `docker info` (start Docker Desktop on macOS, or `sudo systemctl start docker` on Linux)
@@ -469,14 +469,14 @@ The user should receive a response in WhatsApp.
 - Main channel doesn't require a prefix — all messages are processed
 - Personal/solo chats with `requiresTrigger: false` also don't need a prefix
 - Check that the chat JID is in the database: `sqlite3 store/messages.db "SELECT * FROM registered_groups"`
-- Check `logs/nanoclaw.log` for errors
+- Check `logs/nanokimi.log` for errors
 
 **WhatsApp disconnected**:
 - The service will show a macOS notification
 - Run `npm run auth` to re-authenticate
-- Restart the service: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+- Restart the service: `launchctl kickstart -k gui/$(id -u)/com.nanokimi`
 
 **Unload service**:
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl unload ~/Library/LaunchAgents/com.nanokimi.plist
 ```

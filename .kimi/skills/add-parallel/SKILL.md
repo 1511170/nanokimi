@@ -1,6 +1,6 @@
 # Add Parallel AI Integration
 
-Adds Parallel AI MCP integration to NanoClaw for advanced web research capabilities.
+Adds Parallel AI MCP integration to NanoKimi for advanced web research capabilities.
 
 ## What This Adds
 
@@ -69,7 +69,7 @@ Add `PARALLEL_API_KEY` to allowed environment variables in `src/container-runner
 
 Find the line:
 ```typescript
-const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
+const allowedVars = ['MOONSHOT_API_KEY', 'MOONSHOT_API_KEY'];
 ```
 
 Replace with:
@@ -84,7 +84,7 @@ Update `container/agent-runner/src/index.ts`:
 Find the section where `mcpServers` is configured (around line 237-252):
 ```typescript
 const mcpServers: Record<string, any> = {
-  nanoclaw: ipcMcp
+  nanokimi: ipcMcp
 };
 ```
 
@@ -123,7 +123,7 @@ allowedTools: [
   'Bash',
   'Read', 'Write', 'Edit', 'Glob', 'Grep',
   'WebSearch', 'WebFetch',
-  'mcp__nanoclaw__*',
+  'mcp__nanokimi__*',
   'mcp__parallel-search__*',
   'mcp__parallel-task__*'
 ],
@@ -131,7 +131,7 @@ allowedTools: [
 
 ### 5. Add Usage Instructions to CLAUDE.md
 
-Add Parallel AI usage instructions to `groups/main/CLAUDE.md`:
+Add Parallel AI usage instructions to `groups/main/KIMI.md`:
 
 Find the "## What You Can Do" section and add after the existing bullet points:
 ```markdown
@@ -240,7 +240,7 @@ Rebuild the main app and restart:
 
 ```bash
 npm run build
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+launchctl kickstart -k gui/$(id -u)/com.nanokimi
 ```
 
 Wait 3 seconds for service to start, then verify:
@@ -262,7 +262,7 @@ Tell the user to test:
 
 Check logs to verify MCP servers loaded:
 ```bash
-tail -20 logs/nanoclaw.log
+tail -20 logs/nanokimi.log
 ```
 
 Look for: `Parallel AI MCP servers configured`

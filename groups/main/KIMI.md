@@ -30,8 +30,8 @@ The `conversations/` folder contains searchable history of past conversations. U
 When you learn something important:
 - Create files for structured data (e.g., `customers.md`, `preferences.md`)
 - Split files larger than 500 lines into folders
-- Add recurring context directly to this CLAUDE.md
-- Always index new memory files at the top of CLAUDE.md
+- Add recurring context directly to this KIMI.md
+- Always index new memory files at the top of KIMI.md
 
 ## WhatsApp Formatting
 
@@ -143,7 +143,7 @@ Fields:
 3. Add the new group entry with `containerConfig` if needed
 4. Write the updated JSON back
 5. Create the group folder: `/workspace/project/groups/{folder-name}/`
-6. Optionally create an initial `CLAUDE.md` for the group
+6. Optionally create an initial `KIMI.md` for the group
 
 Example folder name conventions:
 - "Family Chat" → `family-chat`
@@ -191,7 +191,7 @@ Read `/workspace/project/data/registered_groups.json` and format it nicely.
 
 ## Global Memory
 
-You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts that should apply to all groups. Only update global memory when explicitly asked to "remember this globally" or similar.
+You can read and write to `/workspace/project/groups/global/KIMI.md` for facts that should apply to all groups. Only update global memory when explicitly asked to "remember this globally" or similar.
 
 ---
 

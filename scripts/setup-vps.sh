@@ -1,5 +1,5 @@
 #!/bin/bash
-# Phase 1: Admin VPS setup for NanoClaw
+# Phase 1: Admin VPS setup for NanoKimi
 # Run as a sudo user (e.g., kinto). Creates an isolated app user with Docker Rootless.
 #
 # Usage: sudo bash scripts/setup-vps.sh
@@ -12,7 +12,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # --- Prompt for username ---
-read -rp "Enter username for NanoClaw: " USERNAME
+read -rp "Enter username for NanoKimi: " USERNAME
 
 if [ -z "$USERNAME" ]; then
   echo "Error: Username cannot be empty."

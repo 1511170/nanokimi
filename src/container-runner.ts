@@ -1,6 +1,6 @@
 /**
- * Container Runner for NanoClaw
- * Spawns agent execution in Apple Container and handles IPC
+ * Container Runner for NanoKimi
+ * Spawns agent execution in Docker containers and handles IPC
  */
 import { ChildProcess, exec, execSync, spawn } from 'child_process';
 import fs from 'fs';
@@ -19,8 +19,8 @@ import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
-const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
-const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const OUTPUT_START_MARKER = '---NANOKIMI_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---NANOKIMI_OUTPUT_END---';
 
 function getHomeDir(): string {
   const home = process.env.HOME || os.homedir();
@@ -117,18 +117,18 @@ function buildVolumeMounts(
     }
   }
 
-  // Per-group Claude sessions directory (isolated from other groups)
-  // Each group gets their own .claude/ to prevent cross-group session access
+  // Per-group Kimi sessions directory (isolated from other groups)
+  // Each group gets their own .kimi/ to prevent cross-group session access
   const groupSessionsDir = path.join(
     DATA_DIR,
     'sessions',
     group.folder,
-    '.claude',
+    '.kimi',
   );
   mkdirForContainer(groupSessionsDir);
   mounts.push({
     hostPath: groupSessionsDir,
-    containerPath: '/home/node/.claude',
+    containerPath: '/home/node/.kimi',
     readonly: false,
   });
 
@@ -144,13 +144,13 @@ function buildVolumeMounts(
   });
 
   // Environment file directory (workaround for Apple Container -i env var bug)
-  // Only expose specific auth variables needed by Claude Code, not the entire .env
+  // Only expose specific auth variables needed by Kimi CLI, not the entire .env
   const envDir = path.join(DATA_DIR, 'env');
   mkdirForContainer(envDir);
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
-    const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
+    const allowedVars = ['MOONSHOT_API_KEY'];
     const filteredLines = envContent.split('\n').filter((line) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) return false;
@@ -222,7 +222,7 @@ export async function runContainerAgent(
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
-  const containerName = `nanoclaw-${safeName}-${Date.now()}`;
+  const containerName = `nanokimi-${safeName}-${Date.now()}`;
   const containerArgs = buildContainerArgs(mounts, containerName);
 
   logger.debug(

@@ -1,9 +1,9 @@
-# NanoClaw Agent Container
-# Runs Claude Agent SDK in isolated Linux VM with browser automation
+# NanoKimi Agent Container
+# Runs Kimi Agent SDK in isolated Linux VM with browser automation
 
 FROM node:22-slim
 
-# Install system dependencies for Chromium
+# Install system dependencies for Chromium and Kimi CLI
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -23,14 +23,19 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+# Install agent-browser globally
+RUN npm install -g agent-browser
+
+# Install Kimi CLI using pip
+RUN pip3 install kimi-cli --break-system-packages
 
 # Create app directory
 WORKDIR /app
@@ -58,7 +63,7 @@ RUN printf '#!/bin/bash\nset -e\nif [ -f /workspace/env-dir/env ]; then\n  set -
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace
 
-# Switch to non-root user (required for --dangerously-skip-permissions)
+# Switch to non-root user
 USER node
 
 # Set working directory to group workspace

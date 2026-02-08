@@ -1,6 +1,6 @@
 ---
 name: add-voice-transcription
-description: Add voice message transcription to NanoClaw using OpenAI's Whisper API. Automatically transcribes WhatsApp voice notes so the agent can read and respond to them.
+description: Add voice message transcription to NanoKimi using OpenAI's Whisper API. Automatically transcribes WhatsApp voice notes so the agent can read and respond to them.
 ---
 
 # Add Voice Message Transcription
@@ -318,7 +318,7 @@ Restart the service to load the new transcription code:
 
 ```bash
 # If using launchd (macOS):
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+launchctl kickstart -k gui/$(id -u)/com.nanokimi
 
 # Or if running manually:
 # Stop the current process and restart with:
@@ -330,7 +330,7 @@ Verify it started:
 ```bash
 sleep 2 && launchctl list | grep nanoclaw
 # or check logs:
-tail -f logs/nanoclaw.log
+tail -f logs/nanokimi.log
 ```
 
 ### Step 8: Test Voice Transcription

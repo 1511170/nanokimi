@@ -1,10 +1,10 @@
-# NanoClaw
+# NanoKimi
 
-Personal Claude assistant. See [README.md](README.md) for philosophy and setup. See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for architecture decisions.
+Personal Kimi assistant. See [README.md](README.md) for philosophy and setup. See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for architecture decisions.
 
 ## Quick Context
 
-Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in Docker containers. Each group has isolated filesystem and memory. Runs on macOS (Docker Desktop + launchd) or Linux VPS (Docker Rootless + systemd).
+Single Node.js process that connects to WhatsApp, routes messages to Kimi Agent SDK running in Docker containers. Each group has isolated filesystem and memory. Runs on macOS (Docker Desktop + launchd) or Linux VPS (Docker Rootless + systemd).
 
 ## Key Files
 
@@ -15,7 +15,7 @@ Single Node.js process that connects to WhatsApp, routes messages to Claude Agen
 | `src/container-runner.ts` | Spawns agent containers with mounts |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |
-| `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
+| `groups/{name}/KIMI.md` | Per-group memory (isolated) |
 | `container/skills/agent-browser.md` | Browser automation tool (available to all agents via Bash) |
 
 ## Skills
@@ -39,13 +39,13 @@ npm run build        # Compile TypeScript
 
 Service management (macOS):
 ```bash
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl load ~/Library/LaunchAgents/com.nanokimi.plist
+launchctl unload ~/Library/LaunchAgents/com.nanokimi.plist
 ```
 
 Service management (Linux):
 ```bash
-systemctl --user start nanoclaw
-systemctl --user stop nanoclaw
-systemctl --user restart nanoclaw
+systemctl --user start nanokimi
+systemctl --user stop nanokimi
+systemctl --user restart nanokimi
 ```

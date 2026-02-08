@@ -1,13 +1,13 @@
 # VPS Deployment Guide
 
-Deploy NanoClaw on a fresh Ubuntu VPS using a two-phase approach.
+Deploy NanoKimi on a fresh Ubuntu VPS using a two-phase approach.
 
 ## Overview
 
 | Phase | Who | What | How |
 |-------|-----|------|-----|
 | **1. Admin** | sudo user (e.g. `kinto`) | Create app user, install packages, Docker Rootless | `sudo bash scripts/setup-vps.sh` |
-| **2. App User** | app user (e.g. `kintoai`) | Clone repo, configure, build, start service | `npx claude` → `/deploy` |
+| **2. App User** | app user (e.g. `kintoai`) | Clone repo, configure, build, start service | `npx kimi` → `/deploy` |
 
 ## Architecture
 
@@ -15,7 +15,7 @@ Deploy NanoClaw on a fresh Ubuntu VPS using a two-phase approach.
 VPS (Ubuntu)
 ├── kinto (admin, sudo)           # Manages system, runs Phase 1
 ├── kintoai (app user, no sudo)   # Runs NanoClaw + Docker Rootless
-│   ├── ~/nanoclaw/               # Project directory
+│   ├── ~/nanokimi/               # Project directory
 │   ├── Docker Rootless daemon    # Per-user, no root required
 │   └── systemd --user service    # Auto-starts on boot (linger)
 └── sofia (optional)              # Another user running OpenClaw
@@ -64,9 +64,9 @@ Without `loginctl enable-linger <user>`, systemd `--user` services stop when the
 |------|---------|
 | Phase 1 (admin) | `sudo bash scripts/setup-vps.sh` |
 | Phase 2 (app user) | `npx claude` → `/deploy` |
-| View logs | `tail -f ~/nanoclaw/logs/nanoclaw.log` |
+| View logs | `tail -f ~/nanoclaw/logs/nanokimi.log` |
 | Restart service | `systemctl --user restart nanoclaw` |
-| Check status | `systemctl --user status nanoclaw` |
+| Check status | `systemctl --user status nanokimi` |
 | Re-auth WhatsApp | `systemctl --user stop nanoclaw && npm run auth && systemctl --user start nanoclaw` |
 | Rebuild container | `./container/build.sh` |
 | Detect container UID | `echo $(($(grep "^$(whoami):" /etc/subuid | cut -d: -f2) + 999))` |
@@ -74,4 +74,4 @@ Without `loginctl enable-linger <user>`, systemd `--user` services stop when the
 ## Files
 
 - [`scripts/setup-vps.sh`](../scripts/setup-vps.sh) — Admin bootstrap (Phase 1)
-- [`.claude/skills/deploy/SKILL.md`](../.claude/skills/deploy/SKILL.md) — Claude Code skill (Phase 2)
+- [`.kimi/skills/deploy/SKILL.md`](../.kimi/skills/deploy/SKILL.md) — Kimi Code skill (Phase 2)

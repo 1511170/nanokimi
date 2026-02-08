@@ -1,9 +1,9 @@
 ---
 name: deploy
-description: Deploy NanoClaw on a VPS (Phase 2). Run as the app user after the admin has run scripts/setup-vps.sh. Sets up Docker Rootless, builds containers, configures systemd, and starts the service. Triggers on "deploy", "vps setup", "install on server".
+description: Deploy NanoKimi on a VPS (Phase 2). Run as the app user after the admin has run scripts/setup-vps.sh. Sets up Docker Rootless, builds containers, configures systemd, and starts the service. Triggers on "deploy", "vps setup", "install on server".
 ---
 
-# NanoClaw VPS Deploy (Phase 2)
+# NanoKimi VPS Deploy (Phase 2)
 
 Run all commands automatically. Only pause when user action is required (scanning QR codes, providing tokens).
 
@@ -62,34 +62,34 @@ If it still fails, tell the user:
 npm install
 ```
 
-## 3. Configure Claude Authentication
+## 3. Configure Kimi Authentication
 
 **Reuse the same flow from `/setup` Section 3.**
 
 Ask the user:
-> Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
+> Do you want to use your **Kimi Code subscription** (Pro/Max) or a **Moonshot API key**?
 
-### Option 1: Claude Subscription (Recommended)
+### Option 1: Kimi Code Subscription (Recommended)
 
 Tell the user:
 > Open another terminal window and run:
 > ```
-> claude setup-token
+> kimi setup-token
 > ```
 > A browser window will open for you to log in. Once authenticated, the token will be displayed in your terminal. Either:
 > 1. Paste it here and I'll add it to `.env` for you, or
-> 2. Add it to `.env` yourself as `CLAUDE_CODE_OAUTH_TOKEN=<your-token>`
+> 2. Add it to `.env` yourself as `MOONSHOT_API_KEY=<your-token>`
 
 **IMPORTANT:** OAuth tokens often contain special characters like `#`. Always wrap the value in single quotes:
 
 ```bash
-echo "CLAUDE_CODE_OAUTH_TOKEN='<token>'" > .env
+echo "MOONSHOT_API_KEY='<token>'" > .env
 ```
 
 ### Option 2: API Key
 
 ```bash
-echo "ANTHROPIC_API_KEY='<key>'" > .env
+echo "MOONSHOT_API_KEY='<key>'" > .env
 ```
 
 Verify:
@@ -105,7 +105,7 @@ Verify:
 
 Verify:
 ```bash
-echo '{}' | docker run -i --rm --entrypoint /bin/echo nanoclaw-agent:latest "Container OK"
+echo '{}' | docker run -i --rm --entrypoint /bin/echo nanokimi-agent:latest "Container OK"
 ```
 
 ## 5. Set Up ACLs on Data Directories
@@ -192,9 +192,9 @@ PROJECT_PATH=$(pwd)
 
 mkdir -p ~/.config/systemd/user
 
-cat > ~/.config/systemd/user/nanoclaw.service << EOF
+cat > ~/.config/systemd/user/nanokimi.service << EOF
 [Unit]
-Description=NanoClaw WhatsApp Assistant
+Description=NanoKimi WhatsApp Assistant
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -211,14 +211,14 @@ Environment=PATH=/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin
 Environment=HOME=${HOME}
 
 # Logging
-StandardOutput=append:${PROJECT_PATH}/logs/nanoclaw.log
-StandardError=append:${PROJECT_PATH}/logs/nanoclaw.error.log
+StandardOutput=append:${PROJECT_PATH}/logs/nanokimi.log
+StandardError=append:${PROJECT_PATH}/logs/nanokimi.error.log
 
 [Install]
 WantedBy=default.target
 EOF
 
-echo "Service file created at ~/.config/systemd/user/nanoclaw.service"
+echo "Service file created at ~/.config/systemd/user/nanokimi.service"
 echo "  Node: ${NODE_PATH}"
 echo "  Project: ${PROJECT_PATH}"
 echo "  DOCKER_HOST: unix://%t/docker.sock"
@@ -227,12 +227,12 @@ echo "  DOCKER_HOST: unix://%t/docker.sock"
 Enable and start:
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now nanoclaw
+systemctl --user enable --now nanokimi
 ```
 
 Verify:
 ```bash
-systemctl --user status nanoclaw --no-pager
+systemctl --user status nanokimi --no-pager
 ```
 
 ## 10. Test
@@ -244,7 +244,7 @@ Tell the user (using the assistant name they configured):
 
 Check the logs:
 ```bash
-tail -20 logs/nanoclaw.log
+tail -20 logs/nanokimi.log
 ```
 
 The user should receive a response in WhatsApp.
@@ -253,9 +253,9 @@ The user should receive a response in WhatsApp.
 
 **Service not starting:**
 ```bash
-systemctl --user status nanoclaw --no-pager
-journalctl --user -u nanoclaw --no-pager -n 50
-cat logs/nanoclaw.error.log
+systemctl --user status nanokimi --no-pager
+journalctl --user -u nanokimi --no-pager -n 50
+cat logs/nanokimi.error.log
 ```
 
 **Docker permission errors:**
@@ -285,17 +285,17 @@ done
 
 **WhatsApp disconnected:**
 ```bash
-systemctl --user stop nanoclaw
+systemctl --user stop nanokimi
 npm run auth
-systemctl --user start nanoclaw
+systemctl --user start nanokimi
 ```
 
 **Restart service:**
 ```bash
-systemctl --user restart nanoclaw
+systemctl --user restart nanokimi
 ```
 
 **View live logs:**
 ```bash
-tail -f logs/nanoclaw.log
+tail -f logs/nanokimi.log
 ```

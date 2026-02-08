@@ -1,11 +1,12 @@
 /**
- * NanoClaw Agent Runner
+ * NanoKimi Agent Runner
  * Runs inside a container, receives config via stdin, outputs result to stdout
  */
 
 import fs from 'fs';
 import path from 'path';
-import { query, HookCallback, PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
+import { createSession, KimiPaths } from '@moonshot-ai/kimi-agent-sdk';
+import type { Session, StreamEvent, RunResult, ContentPart } from '@moonshot-ai/kimi-agent-sdk';
 import { createIpcMcp } from './ipc-mcp.js';
 
 interface ContainerInput {
@@ -71,8 +72,8 @@ async function readStdin(): Promise<string> {
   });
 }
 
-const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
-const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const OUTPUT_START_MARKER = '---NANOKIMI_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---NANOKIMI_OUTPUT_END---';
 
 function writeOutput(output: ContainerOutput): void {
   console.log(OUTPUT_START_MARKER);
@@ -109,47 +110,68 @@ function getSessionSummary(sessionId: string, transcriptPath: string): string | 
 
 /**
  * Archive the full transcript to conversations/ before compaction.
+ * Note: Kimi SDK doesn't have the same PreCompact hook mechanism as Claude SDK.
+ * This functionality is handled differently or can be implemented via session events.
  */
-function createPreCompactHook(): HookCallback {
-  return async (input, _toolUseId, _context) => {
-    const preCompact = input as PreCompactHookInput;
-    const transcriptPath = preCompact.transcript_path;
-    const sessionId = preCompact.session_id;
-
-    if (!transcriptPath || !fs.existsSync(transcriptPath)) {
-      log('No transcript found for archiving');
-      return {};
+async function archiveTranscript(sessionId: string, workDir: string): Promise<void> {
+  try {
+    // Parse session events from Kimi's session storage
+    const events = await parseSessionEvents(workDir, sessionId);
+    
+    if (events.length === 0) {
+      log('No events to archive');
+      return;
     }
 
-    try {
-      const content = fs.readFileSync(transcriptPath, 'utf-8');
-      const messages = parseTranscript(content);
+    // Extract messages from events
+    const messages = extractMessagesFromEvents(events);
+    
+    if (messages.length === 0) {
+      log('No messages to archive');
+      return;
+    }
 
-      if (messages.length === 0) {
-        log('No messages to archive');
-        return {};
+    const summary = getSessionSummary(sessionId, path.join(workDir, '.kimi', 'sessions', sessionId));
+    const name = summary ? sanitizeFilename(summary) : generateFallbackName();
+
+    const conversationsDir = '/workspace/group/conversations';
+    fs.mkdirSync(conversationsDir, { recursive: true });
+
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `${date}-${name}.md`;
+    const filePath = path.join(conversationsDir, filename);
+
+    const markdown = formatTranscriptMarkdown(messages, summary);
+    fs.writeFileSync(filePath, markdown);
+
+    log(`Archived conversation to ${filePath}`);
+  } catch (err) {
+    log(`Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+
+
+interface ParsedMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function extractMessagesFromEvents(events: StreamEvent[]): ParsedMessage[] {
+  const messages: ParsedMessage[] = [];
+  
+  for (const event of events) {
+    if (event.type === 'TurnBegin' && event.payload?.user_input) {
+      messages.push({ role: 'user', content: event.payload.user_input });
+    } else if (event.type === 'ContentPart' && event.payload) {
+      const payload = event.payload as ContentPart;
+      if (payload.type === 'text' && payload.text) {
+        messages.push({ role: 'assistant', content: payload.text });
       }
-
-      const summary = getSessionSummary(sessionId, transcriptPath);
-      const name = summary ? sanitizeFilename(summary) : generateFallbackName();
-
-      const conversationsDir = '/workspace/group/conversations';
-      fs.mkdirSync(conversationsDir, { recursive: true });
-
-      const date = new Date().toISOString().split('T')[0];
-      const filename = `${date}-${name}.md`;
-      const filePath = path.join(conversationsDir, filename);
-
-      const markdown = formatTranscriptMarkdown(messages, summary);
-      fs.writeFileSync(filePath, markdown);
-
-      log(`Archived conversation to ${filePath}`);
-    } catch (err) {
-      log(`Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`);
     }
-
-    return {};
-  };
+  }
+  
+  return messages;
 }
 
 function sanitizeFilename(summary: string): string {
@@ -163,37 +185,6 @@ function sanitizeFilename(summary: string): string {
 function generateFallbackName(): string {
   const time = new Date();
   return `conversation-${time.getHours().toString().padStart(2, '0')}${time.getMinutes().toString().padStart(2, '0')}`;
-}
-
-interface ParsedMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-function parseTranscript(content: string): ParsedMessage[] {
-  const messages: ParsedMessage[] = [];
-
-  for (const line of content.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line);
-      if (entry.type === 'user' && entry.message?.content) {
-        const text = typeof entry.message.content === 'string'
-          ? entry.message.content
-          : entry.message.content.map((c: { text?: string }) => c.text || '').join('');
-        if (text) messages.push({ role: 'user', content: text });
-      } else if (entry.type === 'assistant' && entry.message?.content) {
-        const textParts = entry.message.content
-          .filter((c: { type: string }) => c.type === 'text')
-          .map((c: { text: string }) => c.text);
-        const text = textParts.join('');
-        if (text) messages.push({ role: 'assistant', content: text });
-      }
-    } catch {
-    }
-  }
-
-  return messages;
 }
 
 function formatTranscriptMarkdown(messages: ParsedMessage[], title?: string | null): string {
@@ -215,7 +206,7 @@ function formatTranscriptMarkdown(messages: ParsedMessage[], title?: string | nu
   lines.push('');
 
   for (const msg of messages) {
-    const sender = msg.role === 'user' ? 'User' : 'Andy';
+    const sender = msg.role === 'user' ? 'User' : 'Assistant';
     const content = msg.content.length > 2000
       ? msg.content.slice(0, 2000) + '...'
       : msg.content;
@@ -224,6 +215,36 @@ function formatTranscriptMarkdown(messages: ParsedMessage[], title?: string | nu
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Extract JSON response from text content
+ * Kimi SDK doesn't have built-in structured output like Claude SDK,
+ * so we need to extract JSON from text responses.
+ */
+function extractJsonFromText(text: string): AgentResponse | null {
+  try {
+    // Try to find JSON in code blocks first
+    const codeBlockMatch = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
+    if (codeBlockMatch) {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      if (parsed.outputType) {
+        return parsed as AgentResponse;
+      }
+    }
+    
+    // Try to find raw JSON object
+    const jsonMatch = text.match(/({[\s\S]*"outputType"[\s\S]*})/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (parsed.outputType) {
+        return parsed as AgentResponse;
+      }
+    }
+  } catch {
+    // JSON parsing failed, fall through
+  }
+  return null;
 }
 
 async function main(): Promise<void> {
@@ -257,68 +278,89 @@ async function main(): Promise<void> {
     prompt = `[SCHEDULED TASK - The following message was sent automatically and is not coming directly from the user or group.]\n\n${input.prompt}`;
   }
 
-  // Load global CLAUDE.md as additional system context (shared across all groups)
-  const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
-  let globalClaudeMd: string | undefined;
-  if (!input.isMain && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
+  // Load global KIMI.md as additional system context (shared across all groups)
+  const globalKimiMdPath = '/workspace/global/KIMI.md';
+  let globalKimiMd: string | undefined;
+  if (!input.isMain && fs.existsSync(globalKimiMdPath)) {
+    globalKimiMd = fs.readFileSync(globalKimiMdPath, 'utf-8');
   }
+
+  // Append instructions for structured output
+  const structuredOutputPrompt = `${prompt}
+
+IMPORTANT: You must respond with a JSON object in this exact format:
+{
+  "outputType": "message" | "log",
+  "userMessage": "your response to the user (only if outputType is 'message')",
+  "internalLog": "optional internal log information"
+}
+
+Use "outputType": "message" when you want to send a response to the user.
+Use "outputType": "log" when you only need to log internally without messaging the user.`;
 
   try {
     log('Starting agent...');
 
-    for await (const message of query({
-      prompt,
-      options: {
-        cwd: '/workspace/group',
-        resume: input.sessionId,
-        systemPrompt: globalClaudeMd
-          ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
-          : undefined,
-        allowedTools: [
-          'Bash',
-          'Read', 'Write', 'Edit', 'Glob', 'Grep',
-          'WebSearch', 'WebFetch',
-          'mcp__nanoclaw__*'
-        ],
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        settingSources: ['project'],
-        mcpServers: {
-          nanoclaw: ipcMcp
-        },
-        hooks: {
-          PreCompact: [{ hooks: [createPreCompactHook()] }]
-        },
-        outputFormat: {
-          type: 'json_schema',
-          schema: AGENT_RESPONSE_SCHEMA,
-        }
-      }
-    })) {
-      if (message.type === 'system' && message.subtype === 'init') {
-        newSessionId = message.session_id;
-        log(`Session initialized: ${newSessionId}`);
-      }
+    const session = createSession({
+      workDir: '/workspace/group',
+      sessionId: input.sessionId,
+      model: 'kimi-latest',
+      yoloMode: true,  // Auto-approve tool calls (similar to bypassPermissions)
+      thinking: false,
+    });
 
-      if (message.type === 'result') {
-        if (message.subtype === 'success' && message.structured_output) {
-          result = message.structured_output as AgentResponse;
-          if (result.outputType === 'message' && !result.userMessage) {
-            log('Warning: outputType is "message" but userMessage is missing, treating as "log"');
-            result = { outputType: 'log', internalLog: result.internalLog };
-          }
-          log(`Agent result: outputType=${result.outputType}${result.internalLog ? `, log=${result.internalLog}` : ''}`);
-        } else if (message.subtype === 'success' || message.subtype === 'error_max_structured_output_retries') {
-          // Structured output missing or agent couldn't produce valid structured output — fall back to text
-          log(`Structured output unavailable (subtype=${message.subtype}), falling back to text`);
-          const textResult = 'result' in message ? (message as { result?: string }).result : null;
-          if (textResult) {
-            result = { outputType: 'message', userMessage: textResult };
-          }
+    newSessionId = session.sessionId;
+    log(`Session initialized: ${newSessionId}`);
+
+    const turn = session.prompt(globalKimiMd 
+      ? `${globalKimiMd}\n\n${structuredOutputPrompt}` 
+      : structuredOutputPrompt);
+
+    let fullResponse = '';
+
+    for await (const event of turn) {
+      if (event.type === 'ContentPart') {
+        const payload = event.payload as ContentPart;
+        if (payload.type === 'text') {
+          fullResponse += payload.text;
         }
+      } else if (event.type === 'ToolCall') {
+        log(`Tool called: ${event.payload.function?.name}`);
+      } else if (event.type === 'ToolResult') {
+        log(`Tool result received`);
+      } else if (event.type === 'CompactionBegin') {
+        log('Context compaction started');
+        // Archive transcript before compaction
+        if (newSessionId) {
+          await archiveTranscript(newSessionId, '/workspace/group');
+        }
+      } else if (event.type === 'CompactionEnd') {
+        log('Context compaction ended');
       }
     }
+
+    // Get the final result
+    const runResult: RunResult = await turn.result;
+    log(`Agent completed with status: ${runResult.status}`);
+
+    // Try to extract JSON response
+    const jsonResponse = extractJsonFromText(fullResponse);
+    
+    if (jsonResponse) {
+      result = jsonResponse;
+      if (result.outputType === 'message' && !result.userMessage) {
+        log('Warning: outputType is "message" but userMessage is missing, treating as "log"');
+        result = { outputType: 'log', internalLog: result.internalLog };
+      }
+    } else {
+      // Fallback: treat full response as user message
+      result = { outputType: 'message', userMessage: fullResponse.trim() };
+    }
+
+    log(`Agent result: outputType=${result.outputType}${result.internalLog ? `, log=${result.internalLog}` : ''}`);
+
+    // Close session
+    await session.close();
 
     log('Agent completed successfully');
     writeOutput({

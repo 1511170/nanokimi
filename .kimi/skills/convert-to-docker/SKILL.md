@@ -1,15 +1,15 @@
 ---
 name: convert-to-docker
-description: Convert NanoClaw from Apple Container to Docker for cross-platform support. Use when user wants to run on Linux, switch to Docker, enable cross-platform deployment, or migrate away from Apple Container. Triggers on "docker", "linux support", "convert to docker", "cross-platform", or "replace apple container".
+description: Convert NanoKimi to use Docker for cross-platform support. Use when user wants to run on Linux, switch to Docker, enable cross-platform deployment, or migrate away from Apple Container. Triggers on "docker", "linux support", "convert to docker", "cross-platform", or "replace apple container".
 disable-model-invocation: true
 ---
 
 # Convert to Docker
 
-This skill migrates NanoClaw from Apple Container (macOS-only) to Docker for cross-platform support (macOS and Linux).
+This skill ensures NanoKimi uses Docker for cross-platform support (macOS and Linux).
 
 **What this changes:**
-- Container runtime: Apple Container → Docker
+- Container runtime: Docker (already using Docker)
 - Mount syntax: `--mount type=bind,...,readonly` → `-v path:path:ro`
 - Startup check: `container system status` → `docker info`
 - Build commands: `container build/run` → `docker build/run`
@@ -22,7 +22,7 @@ This skill migrates NanoClaw from Apple Container (macOS-only) to Docker for cro
 
 ## Prerequisites
 
-Verify Docker is installed before starting:
+Verify Docker is installed and running:
 
 ```bash
 docker --version && docker info >/dev/null 2>&1 && echo "Docker ready" || echo "Install Docker first"
@@ -158,7 +158,7 @@ docker build -t "${IMAGE_NAME}:${TAG}" .
 
 ```bash
 # Before:
-echo "  echo '{...}' | container run -i ${IMAGE_NAME}:${TAG}"
+echo "  echo '{...}' | docker run -i ${IMAGE_NAME}:${TAG}"
 
 # After:
 echo "  echo '{...}' | docker run -i ${IMAGE_NAME}:${TAG}"
@@ -170,10 +170,10 @@ Update references in documentation files:
 
 | File | Find | Replace |
 |------|------|---------|
-| `CLAUDE.md` | "Apple Container (Linux VMs)" | "Docker containers" |
+| `KIMI.md` | "Apple Container (Linux VMs)" | "Docker containers" |
 | `README.md` | "Apple containers" | "Docker containers" |
 | `README.md` | "Apple Container" | "Docker" |
-| `README.md` | Requirements section | Update to show Docker instead |
+| `README.md` | Requirements section | Update to show Docker |
 | `docs/REQUIREMENTS.md` | "Apple Container" | "Docker" |
 | `docs/SPEC.md` | "APPLE CONTAINER" | "DOCKER CONTAINER" |
 | `docs/SPEC.md` | All Apple Container references | Docker equivalents |
@@ -194,21 +194,21 @@ Update references in documentation files:
 ```markdown
 **Why Docker?**
 
-Docker provides cross-platform support (macOS and Linux), a large ecosystem, and mature tooling. Docker Desktop on macOS uses a lightweight Linux VM similar to other container solutions.
+Docker provides cross-platform support (macOS and Linux), a large ecosystem, and mature tooling. On Linux VPS, Docker Rootless adds security by running without root privileges.
 ```
 
 **FAQ - "Can I run this on Linux?":**
 ```markdown
 **Can I run this on Linux?**
 
-Yes. NanoClaw uses Docker, which works on both macOS and Linux. Just install Docker and run `/setup`.
+Yes. NanoKimi uses Docker, which works on both macOS and Linux. Run `scripts/setup-vps.sh` as admin to set up the user and Docker Rootless, then run `/deploy` as the app user.
 ```
 
 ## 5. Update Skills
 
-### 5a. Update `.claude/skills/setup/SKILL.md`
+### 5a. Update `.kimi/skills/setup/SKILL.md`
 
-Replace Section 2 "Install Apple Container" with Docker installation:
+Ensure Docker is installed:
 
 ```markdown
 ## 2. Install Docker
@@ -248,8 +248,8 @@ Update build verification:
 Verify the build succeeded:
 
 \`\`\`bash
-docker images | grep nanoclaw-agent
-echo '{}' | docker run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+docker images | grep nanokimi-agent
+echo '{}' | docker run -i --entrypoint /bin/echo nanokimi-agent:latest "Container OK" || echo "Container build failed"
 \`\`\`
 ```
 
@@ -284,7 +284,7 @@ npm run build
 ./container/build.sh
 
 # Verify image exists
-docker images | grep nanoclaw-agent
+docker images | grep nanokimi-agent
 ```
 
 ## 7. Test the Migration
@@ -359,5 +359,5 @@ Check directory permissions on the host. The container runs as uid 1000.
 | `README.md` | Requirements, FAQ |
 | `docs/REQUIREMENTS.md` | Architecture references |
 | `docs/SPEC.md` | Architecture diagram, tech stack |
-| `.claude/skills/setup/SKILL.md` | Installation instructions |
-| `.claude/skills/debug/SKILL.md` | Debug commands |
+| `.kimi/skills/setup/SKILL.md` | Installation instructions |
+| `.kimi/skills/debug/SKILL.md` | Debug commands |

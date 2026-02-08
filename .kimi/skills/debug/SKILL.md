@@ -3,7 +3,7 @@ name: debug
 description: Debug container agent issues. Use when things aren't working, container fails, authentication problems, or to understand how the container system works. Covers logs, environment variables, mounts, and common issues.
 ---
 
-# NanoClaw Container Debugging
+# NanoKimi Container Debugging
 
 This guide covers debugging the containerized agent execution system.
 
@@ -14,26 +14,26 @@ Host (macOS)                          Container (Linux VM)
 ─────────────────────────────────────────────────────────────
 src/container-runner.ts               container/agent-runner/
     │                                      │
-    │ spawns Apple Container               │ runs Claude Agent SDK
+    │ spawns Docker container                │ runs Kimi Agent SDK
     │ with volume mounts                   │ with MCP servers
     │                                      │
     ├── data/env/env ──────────────> /workspace/env-dir/env
     ├── groups/{folder} ───────────> /workspace/group
     ├── data/ipc/{folder} ────────> /workspace/ipc
-    ├── data/sessions/{folder}/.claude/ ──> /home/node/.claude/ (isolated per-group)
+    ├── data/sessions/{folder}/.kimi/ ────> /home/node/.kimi/ (isolated per-group)
     └── (main only) project root ──> /workspace/project
 ```
 
-**Important:** The container runs as user `node` with `HOME=/home/node`. Session files must be mounted to `/home/node/.claude/` (not `/root/.claude/`) for session resumption to work.
+**Important:** The container runs as user `node` with `HOME=/home/node`. Session files must be mounted to `/home/node/.kimi/` (not `/root/.kimi/`) for session resumption to work.
 
 ## Log Locations
 
 | Log | Location | Content |
 |-----|----------|---------|
-| **Main app logs** | `logs/nanoclaw.log` | Host-side WhatsApp, routing, container spawning |
-| **Main app errors** | `logs/nanoclaw.error.log` | Host-side errors |
+| **Main app logs** | `logs/nanokimi.log` | Host-side WhatsApp, routing, container spawning |
+| **Main app errors** | `logs/nanokimi.error.log` | Host-side errors |
 | **Container run logs** | `groups/{folder}/logs/container-*.log` | Per-run: input, mounts, stderr, stdout |
-| **Claude sessions** | `~/.claude/projects/` | Claude Code session history |
+| **Kimi sessions** | `~/.kimi/projects/` | Kimi Code session history |
 
 ## Enabling Debug Logging
 
@@ -55,7 +55,7 @@ Debug level shows:
 
 ## Common Issues
 
-### 1. "Claude Code process exited with code 1"
+### 1. "Kimi Code process exited with code 1"
 
 **Check the container log file** in `groups/{folder}/logs/container-*.log`
 
@@ -63,60 +63,57 @@ Common causes:
 
 #### Missing Authentication
 ```
-Invalid API key · Please run /login
+Invalid API key · Please run kimi login
 ```
-**Fix:** Ensure `.env` file exists with either OAuth token or API key:
+**Fix:** Ensure `.env` file exists with API key:
 ```bash
-cat .env  # Should show one of:
-# CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...  (subscription)
-# ANTHROPIC_API_KEY=sk-ant-api03-...        (pay-per-use)
+cat .env  # Should show:
+# MOONSHOT_API_KEY=sk-...  (API key from https://platform.moonshot.cn/)
 ```
 
 #### Root User Restriction
 ```
---dangerously-skip-permissions cannot be used with root/sudo privileges
+Container cannot run as root
 ```
 **Fix:** Container must run as non-root user. Check Dockerfile has `USER node`.
 
 ### 2. Environment Variables Not Passing
 
-**Apple Container Bug:** Environment variables passed via `-e` are lost when using `-i` (interactive/piped stdin).
-
-**Workaround:** The system extracts only authentication variables (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`) from `.env` and mounts them for sourcing inside the container. Other env vars are not exposed.
+**Workaround:** The system extracts only authentication variable (`MOONSHOT_API_KEY`) from `.env` and mounts it for sourcing inside the container. Other env vars are not exposed.
 
 To verify env vars are reaching the container:
 ```bash
-echo '{}' | container run -i \
-  --mount type=bind,source=$(pwd)/data/env,target=/workspace/env-dir,readonly \
-  --entrypoint /bin/bash nanoclaw-agent:latest \
-  -c 'export $(cat /workspace/env-dir/env | xargs); echo "OAuth: ${#CLAUDE_CODE_OAUTH_TOKEN} chars, API: ${#ANTHROPIC_API_KEY} chars"'
+echo '{}' | docker run -i \
+  -v $(pwd)/data/env:/workspace/env-dir:ro \
+  --entrypoint /bin/bash nanokimi-agent:latest \
+  -c 'export $(cat /workspace/env-dir/env | xargs); echo "API Key: ${#MOONSHOT_API_KEY} chars"'
 ```
 
 ### 3. Mount Issues
 
-**Apple Container quirks:**
-- Only mounts directories, not individual files
-- `-v` syntax does NOT support `:ro` suffix - use `--mount` for readonly:
+**Docker mount syntax:**
+- Use `-v` for both files and directories
+- Add `:ro` suffix for read-only mounts:
   ```bash
-  # Readonly: use --mount
-  --mount "type=bind,source=/path,target=/container/path,readonly"
+  # Readonly
+  -v /path:/container/path:ro
 
-  # Read-write: use -v
+  # Read-write
   -v /path:/container/path
   ```
 
 To check what's mounted inside a container:
 ```bash
-container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c 'ls -la /workspace/'
+docker run --rm --entrypoint /bin/bash nanokimi-agent:latest -c 'ls -la /workspace/'
 ```
 
 Expected structure:
 ```
 /workspace/
-├── env-dir/env           # Environment file (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)
+├── env-dir/env           # Environment file (MOONSHOT_API_KEY)
 ├── group/                # Current group folder (cwd)
 ├── project/              # Project root (main channel only)
-├── global/               # Global CLAUDE.md (non-main only)
+├── global/               # Global KIMI.md (non-main only)
 ├── ipc/                  # Inter-process communication
 │   ├── messages/         # Outgoing WhatsApp messages
 │   ├── tasks/            # Scheduled task commands
@@ -138,33 +135,33 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
 
 All of `/workspace/` and `/app/` should be owned by `node`.
 
-### 5. Session Not Resuming / "Claude Code process exited with code 1"
+### 5. Session Not Resuming / "Kimi Code process exited with code 1"
 
-If sessions aren't being resumed (new session ID every time), or Claude Code exits with code 1 when resuming:
+If sessions aren't being resumed (new session ID every time), or Kimi Code exits with code 1 when resuming:
 
-**Root cause:** The SDK looks for sessions at `$HOME/.claude/projects/`. Inside the container, `HOME=/home/node`, so it looks at `/home/node/.claude/projects/`.
+**Root cause:** The SDK looks for sessions at `$HOME/.kimi/sessions/`. Inside the container, `HOME=/home/node`, so it looks at `/home/node/.kimi/sessions/`.
 
 **Check the mount path:**
 ```bash
-# In container-runner.ts, verify mount is to /home/node/.claude/, NOT /root/.claude/
-grep -A3 "Claude sessions" src/container-runner.ts
+# In container-runner.ts, verify mount is to /home/node/.kimi/, NOT /root/.kimi/
+grep -A3 "Kimi sessions" src/container-runner.ts
 ```
 
 **Verify sessions are accessible:**
 ```bash
-container run --rm --entrypoint /bin/bash \
-  -v ~/.claude:/home/node/.claude \
-  nanoclaw-agent:latest -c '
+docker run --rm --entrypoint /bin/bash \
+  -v ~/.kimi:/home/node/.kimi \
+  nanokimi-agent:latest -c '
 echo "HOME=$HOME"
-ls -la $HOME/.claude/projects/ 2>&1 | head -5
+ls -la $HOME/.kimi/sessions/ 2>&1 | head -5
 '
 ```
 
-**Fix:** Ensure `container-runner.ts` mounts to `/home/node/.claude/`:
+**Fix:** Ensure `container-runner.ts` mounts to `/home/node/.kimi/`:
 ```typescript
 mounts.push({
-  hostPath: claudeDir,
-  containerPath: '/home/node/.claude',  // NOT /root/.claude
+  hostPath: kimiDir,
+  containerPath: '/home/node/.kimi',  // NOT /root/.kimi
   readonly: false
 });
 ```
@@ -183,47 +180,49 @@ cp .env data/env/env
 
 # Run test query
 echo '{"prompt":"What is 2+2?","groupFolder":"test","chatJid":"test@g.us","isMain":false}' | \
-  container run -i \
-  --mount "type=bind,source=$(pwd)/data/env,target=/workspace/env-dir,readonly" \
+  docker run -i \
+  -v $(pwd)/data/env:/workspace/env-dir:ro \
   -v $(pwd)/groups/test:/workspace/group \
   -v $(pwd)/data/ipc:/workspace/ipc \
-  nanoclaw-agent:latest
+  nanokimi-agent:latest
 ```
 
-### Test Claude Code directly:
+### Test Kimi CLI directly:
 ```bash
-container run --rm --entrypoint /bin/bash \
-  --mount "type=bind,source=$(pwd)/data/env,target=/workspace/env-dir,readonly" \
-  nanoclaw-agent:latest -c '
+docker run --rm --entrypoint /bin/bash \
+  -v $(pwd)/data/env:/workspace/env-dir:ro \
+  nanokimi-agent:latest -c '
   export $(cat /workspace/env-dir/env | xargs)
-  claude -p "Say hello" --dangerously-skip-permissions --allowedTools ""
+  kimi -p "Say hello"
 '
 ```
 
 ### Interactive shell in container:
 ```bash
-container run --rm -it --entrypoint /bin/bash nanoclaw-agent:latest
+docker run --rm -it --entrypoint /bin/bash nanokimi-agent:latest
 ```
 
 ## SDK Options Reference
 
-The agent-runner uses these Claude Agent SDK options:
+The agent-runner uses these Kimi Agent SDK options:
 
 ```typescript
-query({
-  prompt: input.prompt,
-  options: {
-    cwd: '/workspace/group',
-    allowedTools: ['Bash', 'Read', 'Write', ...],
-    permissionMode: 'bypassPermissions',
-    allowDangerouslySkipPermissions: true,  // Required with bypassPermissions
-    settingSources: ['project'],
-    mcpServers: { ... }
-  }
-})
+const session = createSession({
+  workDir: '/workspace/group',
+  sessionId: input.sessionId,
+  model: 'kimi-latest',
+  yoloMode: true,  // Auto-approve tool calls
+  thinking: false,
+});
+
+const turn = session.prompt(input.prompt);
+
+for await (const event of turn) {
+  // Handle events
+}
 ```
 
-**Important:** `allowDangerouslySkipPermissions: true` is required when using `permissionMode: 'bypassPermissions'`. Without it, Claude Code exits with code 1.
+**Important:** `yoloMode: true` enables auto-approval of tool calls, similar to `bypassPermissions` in Claude SDK.
 
 ## Rebuilding After Changes
 
@@ -235,7 +234,7 @@ npm run build
 ./container/build.sh
 
 # Or force full rebuild
-container builder prune -af
+docker builder prune -af
 ./container/build.sh
 ```
 
@@ -243,15 +242,15 @@ container builder prune -af
 
 ```bash
 # List images
-container images
+docker images
 
 # Check what's in the image
-container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
+docker run --rm --entrypoint /bin/bash nanokimi-agent:latest -c '
   echo "=== Node version ==="
   node --version
 
-  echo "=== Claude Code version ==="
-  claude --version
+  echo "=== Kimi CLI version ==="
+  kimi --version
 
   echo "=== Installed packages ==="
   ls /app/node_modules/
@@ -260,12 +259,12 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
 
 ## Session Persistence
 
-Claude sessions are stored per-group in `data/sessions/{group}/.claude/` for security isolation. Each group has its own session directory, preventing cross-group access to conversation history.
+Kimi sessions are stored per-group in `data/sessions/{group}/.kimi/` for security isolation. Each group has its own session directory, preventing cross-group access to conversation history.
 
 **Critical:** The mount path must match the container user's HOME directory:
 - Container user: `node`
 - Container HOME: `/home/node`
-- Mount target: `/home/node/.claude/` (NOT `/root/.claude/`)
+- Mount target: `/home/node/.kimi/` (NOT `/root/.kimi/`)
 
 To clear sessions:
 
@@ -274,15 +273,15 @@ To clear sessions:
 rm -rf data/sessions/
 
 # Clear sessions for a specific group
-rm -rf data/sessions/{groupFolder}/.claude/
+rm -rf data/sessions/{groupFolder}/.kimi/
 
-# Also clear the session ID from NanoClaw's tracking
+# Also clear the session ID from NanoKimi's tracking
 echo '{}' > data/sessions.json
 ```
 
 To verify session resumption is working, check the logs for the same session ID across messages:
 ```bash
-grep "Session initialized" logs/nanoclaw.log | tail -5
+grep "Session initialized" logs/nanokimi.log | tail -5
 # Should show the SAME session ID for consecutive messages in the same group
 ```
 
@@ -318,22 +317,22 @@ cat data/ipc/{groupFolder}/current_tasks.json
 Run this to check common issues:
 
 ```bash
-echo "=== Checking NanoClaw Container Setup ==="
+echo "=== Checking NanoKimi Container Setup ==="
 
 echo -e "\n1. Authentication configured?"
-[ -f .env ] && (grep -q "CLAUDE_CODE_OAUTH_TOKEN=sk-" .env || grep -q "ANTHROPIC_API_KEY=sk-" .env) && echo "OK" || echo "MISSING - add CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY to .env"
+[ -f .env ] && grep -q "MOONSHOT_API_KEY=sk-" .env && echo "OK" || echo "MISSING - add MOONSHOT_API_KEY to .env"
 
 echo -e "\n2. Env file copied for container?"
 [ -f data/env/env ] && echo "OK" || echo "MISSING - will be created on first run"
 
-echo -e "\n3. Apple Container system running?"
-container system status &>/dev/null && echo "OK" || echo "NOT RUNNING - NanoClaw should auto-start it; check logs"
+echo -e "\n3. Docker daemon running?"
+docker info &>/dev/null && echo "OK" || echo "NOT RUNNING - start Docker"
 
 echo -e "\n4. Container image exists?"
-echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "OK" 2>/dev/null || echo "MISSING - run ./container/build.sh"
+echo '{}' | docker run -i --entrypoint /bin/echo nanokimi-agent:latest "OK" 2>/dev/null || echo "MISSING - run ./container/build.sh"
 
 echo -e "\n5. Session mount path correct?"
-grep -q "/home/node/.claude" src/container-runner.ts 2>/dev/null && echo "OK" || echo "WRONG - should mount to /home/node/.claude/, not /root/.claude/"
+grep -q "/home/node/.kimi" src/container-runner.ts 2>/dev/null && echo "OK" || echo "WRONG - should mount to /home/node/.kimi/, not /root/.kimi/"
 
 echo -e "\n6. Groups directory?"
 ls -la groups/ 2>/dev/null || echo "MISSING - run setup"
@@ -342,6 +341,6 @@ echo -e "\n7. Recent container logs?"
 ls -t groups/*/logs/container-*.log 2>/dev/null | head -3 || echo "No container logs yet"
 
 echo -e "\n8. Session continuity working?"
-SESSIONS=$(grep "Session initialized" logs/nanoclaw.log 2>/dev/null | tail -5 | awk '{print $NF}' | sort -u | wc -l)
+SESSIONS=$(grep "Session initialized" logs/nanokimi.log 2>/dev/null | tail -5 | awk '{print $NF}' | sort -u | wc -l)
 [ "$SESSIONS" -le 2 ] && echo "OK (recent sessions reusing IDs)" || echo "CHECK - multiple different session IDs, may indicate resumption issues"
 ```

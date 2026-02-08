@@ -1,6 +1,6 @@
 ---
 name: add-gmail
-description: Add Gmail integration to NanoClaw. Can be configured as a tool (agent reads/sends emails when triggered from WhatsApp) or as a full channel (emails can trigger the agent, schedule tasks, and receive replies). Guides through GCP OAuth setup and implements the integration.
+description: Add Gmail integration to NanoKimi. Can be configured as a tool (agent reads/sends emails when triggered from WhatsApp) or as a full channel (emails can trigger the agent, schedule tasks, and receive replies). Guides through GCP OAuth setup and implements the integration.
 ---
 
 # Add Gmail Integration
@@ -14,7 +14,7 @@ This skill adds Gmail capabilities to NanoClaw. It can be configured in two mode
 
 Ask the user:
 
-> How do you want to use Gmail with NanoClaw?
+> How do you want to use Gmail with NanoKimi?
 >
 > **Option 1: Tool Mode**
 > - Agent can read and send emails when you ask it to
@@ -74,9 +74,9 @@ Wait for user confirmation, then continue:
 >    - Go to **APIs & Services → Credentials** (in the left sidebar)
 >    - Click **+ CREATE CREDENTIALS** at the top
 >    - Select **OAuth client ID**
->    - If prompted for consent screen, choose "External", fill in app name (e.g., "NanoClaw"), your email, and save
+>    - If prompted for consent screen, choose "External", fill in app name (e.g., "NanoKimi"), your email, and save
 >    - For Application type, select **Desktop app**
->    - Name it anything (e.g., "NanoClaw Gmail")
+>    - Name it anything (e.g., "NanoKimi Gmail")
 >    - Click **Create**
 
 Wait for user confirmation, then continue:
@@ -179,14 +179,14 @@ The result should look like:
 
 ```typescript
 mcpServers: {
-  nanoclaw: ipcMcp,
+  nanokimi: ipcMcp,
   gmail: { command: 'npx', args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'] }
 },
 allowedTools: [
   'Bash',
   'Read', 'Write', 'Edit', 'Glob', 'Grep',
   'WebSearch', 'WebFetch',
-  'mcp__nanoclaw__*',
+  'mcp__nanokimi__*',
   'mcp__gmail__*'
 ],
 ```
@@ -211,7 +211,7 @@ if (fs.existsSync(gmailDir)) {
 
 ### Step 3: Update Group Memory
 
-Append to `groups/CLAUDE.md` (the global memory file):
+Append to `groups/KIMI.md` (the global memory file):
 
 ```markdown
 
@@ -227,7 +227,7 @@ You have access to Gmail via MCP tools:
 Example: "Check my unread emails from today" or "Send an email to john@example.com about the meeting"
 ```
 
-Also append the same section to `groups/main/CLAUDE.md`.
+Also append the same section to `groups/main/KIMI.md`.
 
 ### Step 4: Rebuild and Restart
 
@@ -246,7 +246,7 @@ cd .. && npm run build
 Wait for TypeScript compilation, then restart the service:
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+launchctl kickstart -k gui/$(id -u)/com.nanokimi
 ```
 
 Check that it started:
@@ -270,7 +270,7 @@ Tell the user:
 Watch the logs for any errors:
 
 ```bash
-tail -f logs/nanoclaw.log
+tail -f logs/nanokimi.log
 ```
 
 ---
@@ -610,7 +610,7 @@ Create the email group directory and memory file:
 mkdir -p groups/email
 ```
 
-Write `groups/email/CLAUDE.md`:
+Write `groups/email/KIMI.md`:
 
 ```markdown
 # Email Channel
