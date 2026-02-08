@@ -2,7 +2,7 @@
  * Container Runner for NanoClaw
  * Spawns agent execution in Apple Container and handles IPC
  */
-import { ChildProcess, exec, spawn } from 'child_process';
+import { ChildProcess, exec, execSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -59,6 +59,22 @@ interface VolumeMount {
   readonly: boolean;
 }
 
+/**
+ * Create directory with ACL permissions for Docker Rootless compatibility.
+ * Grants rwx to UID 200999 (container node user mapped by rootless Docker)
+ * with default ACL so new files/subdirs inherit the permission.
+ */
+export function mkdirForContainer(dir: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    execSync(`setfacl -m u:200999:rwx "${dir}"`, { stdio: 'pipe' });
+    execSync(`setfacl -d -m u:200999:rwx "${dir}"`, { stdio: 'pipe' });
+  } catch {
+    // Fallback to chmod if ACL fails
+    try { fs.chmodSync(dir, 0o777); } catch { /* ignore */ }
+  }
+}
+
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
@@ -109,7 +125,7 @@ function buildVolumeMounts(
     group.folder,
     '.claude',
   );
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
+  mkdirForContainer(groupSessionsDir);
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
@@ -119,8 +135,8 @@ function buildVolumeMounts(
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = path.join(DATA_DIR, 'ipc', group.folder);
-  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
+  mkdirForContainer(path.join(groupIpcDir, 'messages'));
+  mkdirForContainer(path.join(groupIpcDir, 'tasks'));
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
@@ -130,7 +146,7 @@ function buildVolumeMounts(
   // Environment file directory (workaround for Apple Container -i env var bug)
   // Only expose specific auth variables needed by Claude Code, not the entire .env
   const envDir = path.join(DATA_DIR, 'env');
-  fs.mkdirSync(envDir, { recursive: true });
+  mkdirForContainer(envDir);
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
@@ -142,9 +158,19 @@ function buildVolumeMounts(
     });
 
     if (filteredLines.length > 0) {
+      // Quote values to handle special characters (e.g. # in OAuth tokens)
+      const quotedLines = filteredLines.map((line) => {
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) return line;
+        const key = line.slice(0, eqIdx);
+        const value = line.slice(eqIdx + 1);
+        // Strip existing quotes if present, then re-quote with single quotes
+        const unquoted = value.replace(/^['"]|['"]$/g, '');
+        return `${key}='${unquoted}'`;
+      });
       fs.writeFileSync(
         path.join(envDir, 'env'),
-        filteredLines.join('\n') + '\n',
+        quotedLines.join('\n') + '\n',
       );
       mounts.push({
         hostPath: envDir,
@@ -170,13 +196,10 @@ function buildVolumeMounts(
 function buildContainerArgs(mounts: VolumeMount[], containerName: string): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
-  // Apple Container: --mount for readonly, -v for read-write
+  // Docker: use -v with :ro suffix for readonly, plain -v for read-write
   for (const mount of mounts) {
     if (mount.readonly) {
-      args.push(
-        '--mount',
-        `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
-      );
+      args.push('-v', `${mount.hostPath}:${mount.containerPath}:ro`);
     } else {
       args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
     }
@@ -195,7 +218,7 @@ export async function runContainerAgent(
   const startTime = Date.now();
 
   const groupDir = path.join(GROUPS_DIR, group.folder);
-  fs.mkdirSync(groupDir, { recursive: true });
+  mkdirForContainer(groupDir);
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
@@ -226,10 +249,10 @@ export async function runContainerAgent(
   );
 
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
-  fs.mkdirSync(logsDir, { recursive: true });
+  mkdirForContainer(logsDir);
 
   return new Promise((resolve) => {
-    const container = spawn('container', containerArgs, {
+    const container = spawn('docker', containerArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -285,7 +308,7 @@ export async function runContainerAgent(
       timedOut = true;
       logger.error({ group: group.name, containerName }, 'Container timeout, stopping gracefully');
       // Graceful stop: sends SIGTERM, waits, then SIGKILL — lets --rm fire
-      exec(`container stop ${containerName}`, { timeout: 15000 }, (err) => {
+      exec(`docker stop ${containerName}`, { timeout: 15000 }, (err) => {
         if (err) {
           logger.warn({ group: group.name, containerName, err }, 'Graceful stop failed, force killing');
           container.kill('SIGKILL');
@@ -476,7 +499,7 @@ export function writeTasksSnapshot(
 ): void {
   // Write filtered tasks to the group's IPC directory
   const groupIpcDir = path.join(DATA_DIR, 'ipc', groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
+  mkdirForContainer(groupIpcDir);
 
   // Main sees all tasks, others only see their own
   const filteredTasks = isMain
@@ -506,7 +529,7 @@ export function writeGroupsSnapshot(
   registeredJids: Set<string>,
 ): void {
   const groupIpcDir = path.join(DATA_DIR, 'ipc', groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
+  mkdirForContainer(groupIpcDir);
 
   // Main sees all groups; others see nothing (they can't activate groups)
   const visibleGroups = isMain ? groups : [];
