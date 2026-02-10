@@ -112,13 +112,34 @@ function buildVolumeMounts(
       mounts.push({
         hostPath: globalDir,
         containerPath: '/workspace/global',
-        readonly: true,
+        readonly: false,
       });
     }
   }
 
+  // Kimi config file (for OAuth authentication with Kimi Code CLI)
+  // Mounted as a file (not directory) to provide OAuth configuration
+  const kimiConfigFile = path.join(DATA_DIR, 'credentials', 'config.toml');
+  if (fs.existsSync(kimiConfigFile)) {
+    mounts.push({
+      hostPath: kimiConfigFile,
+      containerPath: '/home/node/.kimi/config.toml',
+      readonly: false,
+    });
+  }
+
+  // Kimi credentials directory (for Kimi Code CLI OAuth tokens)
+  const kimiCredentialsDir = path.join(DATA_DIR, 'credentials');
+  if (fs.existsSync(kimiCredentialsDir)) {
+    mounts.push({
+      hostPath: kimiCredentialsDir,
+      containerPath: '/home/node/.kimi/credentials',
+      readonly: false,
+    });
+  }
+
   // Per-group Kimi sessions directory (isolated from other groups)
-  // Each group gets their own .kimi/ to prevent cross-group session access
+  // Mounted to .kimi/sessions/ to avoid conflicting with config.toml
   const groupSessionsDir = path.join(
     DATA_DIR,
     'sessions',
@@ -128,7 +149,7 @@ function buildVolumeMounts(
   mkdirForContainer(groupSessionsDir);
   mounts.push({
     hostPath: groupSessionsDir,
-    containerPath: '/home/node/.kimi',
+    containerPath: '/home/node/.kimi/sessions',
     readonly: false,
   });
 
@@ -175,7 +196,7 @@ function buildVolumeMounts(
       mounts.push({
         hostPath: envDir,
         containerPath: '/workspace/env-dir',
-        readonly: true,
+        readonly: false,
       });
     }
   }

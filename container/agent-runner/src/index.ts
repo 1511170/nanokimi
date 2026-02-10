@@ -109,6 +109,34 @@ function getSessionSummary(sessionId: string, transcriptPath: string): string | 
 }
 
 /**
+ * Parse session events from Kimi's session storage
+ * Reads the events.jsonl file from the session directory
+ */
+async function parseSessionEvents(workDir: string, sessionId: string): Promise<StreamEvent[]> {
+  const eventsPath = path.join(workDir, '.kimi', 'sessions', sessionId, 'events.jsonl');
+  
+  if (!fs.existsSync(eventsPath)) {
+    log(`Events file not found at ${eventsPath}`);
+    return [];
+  }
+
+  const events: StreamEvent[] = [];
+  const content = fs.readFileSync(eventsPath, 'utf-8');
+  const lines = content.split('\n').filter(line => line.trim());
+
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+      events.push(event);
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  return events;
+}
+
+/**
  * Archive the full transcript to conversations/ before compaction.
  * Note: Kimi SDK doesn't have the same PreCompact hook mechanism as Claude SDK.
  * This functionality is handled differently or can be implemented via session events.
@@ -162,7 +190,21 @@ function extractMessagesFromEvents(events: StreamEvent[]): ParsedMessage[] {
   
   for (const event of events) {
     if (event.type === 'TurnBegin' && event.payload?.user_input) {
-      messages.push({ role: 'user', content: event.payload.user_input });
+      const userInput = event.payload.user_input;
+      // Handle both string and ContentPart array
+      if (typeof userInput === 'string') {
+        messages.push({ role: 'user', content: userInput });
+      } else if (Array.isArray(userInput)) {
+        // Extract text from ContentPart array
+        const textParts = userInput
+          .filter((part): part is ContentPart => part && typeof part === 'object')
+          .map(part => part.type === 'text' ? part.text : '')
+          .filter(text => text)
+          .join('\n');
+        if (textParts) {
+          messages.push({ role: 'user', content: textParts });
+        }
+      }
     } else if (event.type === 'ContentPart' && event.payload) {
       const payload = event.payload as ContentPart;
       if (payload.type === 'text' && payload.text) {
@@ -304,7 +346,7 @@ Use "outputType": "log" when you only need to log internally without messaging t
     const session = createSession({
       workDir: '/workspace/group',
       sessionId: input.sessionId,
-      model: 'kimi-latest',
+      model: 'kimi-code',
       yoloMode: true,  // Auto-approve tool calls (similar to bypassPermissions)
       thinking: false,
     });
