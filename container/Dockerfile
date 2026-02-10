@@ -1,9 +1,18 @@
 # NanoKimi Agent Container
 # Runs Kimi Agent SDK in isolated Linux VM with browser automation
 
-FROM node:22-slim
+FROM python:3.12-slim-bookworm
 
-# Install system dependencies for Chromium and Kimi CLI
+# Install Node.js 22
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install system dependencies for Chromium
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -21,10 +30,7 @@ RUN apt-get update && apt-get install -y \
     libcups2 \
     libdrm2 \
     libxshmfence1 \
-    curl \
     git \
-    python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
@@ -35,7 +41,7 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 RUN npm install -g agent-browser
 
 # Install Kimi CLI using pip
-RUN pip3 install kimi-cli --break-system-packages
+RUN pip install kimi-cli
 
 # Create app directory
 WORKDIR /app
@@ -55,10 +61,15 @@ RUN npm run build
 # Create workspace directories
 RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks
 
-# Create entrypoint script
-# Sources env from mounted /workspace/env-dir/env if it exists
-# Uses set -a/+a to handle special characters (like #) in values
-RUN printf '#!/bin/bash\nset -e\nif [ -f /workspace/env-dir/env ]; then\n  set -a\n  . /workspace/env-dir/env\n  set +a\nfi\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Create node user for compatibility with home directory
+RUN groupadd -r node && useradd -r -g node -u 1000 -m -d /home/node node
+
+# Create .kimi directory for Kimi CLI and set ownership
+RUN mkdir -p /home/node/.kimi && chown -R node:node /home/node
 
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace
