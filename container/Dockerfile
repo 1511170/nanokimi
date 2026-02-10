@@ -1,9 +1,18 @@
 # NanoKimi Agent Container
 # Runs Kimi Agent SDK in isolated Linux VM with browser automation
+# Uses Python 3.12 for kimi-cli compatibility
 
-FROM node:22-slim
+FROM python:3.12-slim
 
-# Install system dependencies for Chromium and Kimi CLI
+# Install Node.js 22.x (needed for agent-runner)
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install system dependencies for Chromium
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -21,10 +30,7 @@ RUN apt-get update && apt-get install -y \
     libcups2 \
     libdrm2 \
     libxshmfence1 \
-    curl \
     git \
-    python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
@@ -34,8 +40,8 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Install agent-browser globally
 RUN npm install -g agent-browser
 
-# Install Kimi CLI using pip
-RUN pip3 install kimi-cli --break-system-packages
+# Install Kimi CLI using pip (now works with Python 3.12)
+RUN pip install --no-cache-dir kimi-cli
 
 # Create app directory
 WORKDIR /app
@@ -61,7 +67,8 @@ RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/
 RUN printf '#!/bin/bash\nset -e\nif [ -f /workspace/env-dir/env ]; then\n  set -a\n  . /workspace/env-dir/env\n  set +a\nfi\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
-RUN chown -R node:node /workspace
+RUN useradd -m -s /bin/bash node 2>/dev/null || true && \
+    chown -R node:node /workspace /app
 
 # Switch to non-root user
 USER node
