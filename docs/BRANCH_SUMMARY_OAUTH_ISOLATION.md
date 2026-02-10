@@ -109,7 +109,34 @@ scripts/setup-oauth-isolation.sh | 82 ++++++++++++++++++++++++  (new script)
 
 This branch should be merged after `fix/oauth-docker-mounts` as it builds upon the OAuth functionality while improving security. It maintains full compatibility while adding proper credential isolation.
 
+## Known Issues / Limitations
+
+### 1. Agent Context Loading (Separate Issue)
+
+The agent-runner does not currently load the group's `KIMI.md` as system context. This means:
+- The agent may not recognize its name (Kai) correctly
+- The agent may not have access to group-specific capabilities documented in KIMI.md
+- The agent responds as a generic "Kimi Code CLI" instead of the configured assistant
+
+**Workaround**: This is a separate issue from OAuth token isolation. For now, the agent still functions but without the full context from KIMI.md.
+
+**Fix Required**: Update `container/agent-runner/src/index.ts` to:
+1. Load `/workspace/group/KIMI.md` as system context
+2. Change model from `'kimi-latest'` to `'kimi-code'`
+3. Rebuild the Docker image
+
+### 2. Docker Image Rebuild
+
+The container image cannot currently be rebuilt because:
+- Base image has Python 3.11
+- `kimi-cli` requires Python >=3.12
+
+**Workaround**: Use the existing image (`nanoclaw-agent:latest`)
+
+**Fix Required**: Update Dockerfile to use Python 3.12 or 3.13 base image
+
 ## Related
 
 - Previous branch: `fix/oauth-docker-mounts`
 - Issue addressed: OAuth token refresh requiring write access vs. credential security
+- Follow-up needed: Agent context loading fix (separate branch)
