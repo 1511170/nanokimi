@@ -117,8 +117,31 @@ function buildVolumeMounts(
     }
   }
 
+  // Kimi config file (for OAuth authentication with Kimi Code CLI)
+  // Mounted as read-only file - contains sensitive OAuth configuration
+  const kimiConfigFile = path.join(DATA_DIR, 'credentials', 'config.toml');
+  if (fs.existsSync(kimiConfigFile)) {
+    mounts.push({
+      hostPath: kimiConfigFile,
+      containerPath: '/home/node/.kimi/config.toml',
+      readonly: true,
+    });
+  }
+
+  // Kimi OAuth token directory (isolated from other credentials)
+  // Only the OAuth token is mounted as writable for token refresh
+  // Other credentials remain inaccessible to the container
+  const oauthTokenDir = path.join(DATA_DIR, 'oauth-token');
+  if (fs.existsSync(oauthTokenDir)) {
+    mounts.push({
+      hostPath: oauthTokenDir,
+      containerPath: '/home/node/.kimi/credentials',
+      readonly: false,
+    });
+  }
+
   // Per-group Kimi sessions directory (isolated from other groups)
-  // Each group gets their own .kimi/ to prevent cross-group session access
+  // Mounted to .kimi/sessions/ to avoid conflicting with config.toml
   const groupSessionsDir = path.join(
     DATA_DIR,
     'sessions',
@@ -128,7 +151,7 @@ function buildVolumeMounts(
   mkdirForContainer(groupSessionsDir);
   mounts.push({
     hostPath: groupSessionsDir,
-    containerPath: '/home/node/.kimi',
+    containerPath: '/home/node/.kimi/sessions',
     readonly: false,
   });
 
