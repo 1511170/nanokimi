@@ -1,0 +1,26 @@
+[Unit]
+Description=NanoKimi WhatsApp Assistant
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/camilo/nanokimi
+ExecStart=/usr/bin/node /home/camilo/nanokimi/dist/index.js
+Restart=always
+RestartSec=10
+
+# Load environment variables from .env file
+EnvironmentFile=/home/camilo/nanokimi/.env
+
+# Docker Rootless requires this
+Environment=DOCKER_HOST=unix://%t/docker.sock
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/camilo/.local/bin
+Environment=HOME=/home/camilo
+
+# Logging
+StandardOutput=append:/home/camilo/nanokimi/logs/nanokimi.log
+StandardError=append:/home/camilo/nanokimi/logs/nanokimi.error.log
+
+[Install]
+WantedBy=default.target
