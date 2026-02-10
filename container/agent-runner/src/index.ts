@@ -278,6 +278,16 @@ async function main(): Promise<void> {
     prompt = `[SCHEDULED TASK - The following message was sent automatically and is not coming directly from the user or group.]\n\n${input.prompt}`;
   }
 
+  // Load group KIMI.md as primary system context (defines assistant identity and capabilities)
+  const groupKimiMdPath = '/workspace/group/KIMI.md';
+  let groupKimiMd: string | undefined;
+  if (fs.existsSync(groupKimiMdPath)) {
+    groupKimiMd = fs.readFileSync(groupKimiMdPath, 'utf-8');
+    log(`Loaded group context from ${groupKimiMdPath}`);
+  } else {
+    log(`Warning: No KIMI.md found at ${groupKimiMdPath}`);
+  }
+
   // Load global KIMI.md as additional system context (shared across all groups)
   const globalKimiMdPath = '/workspace/global/KIMI.md';
   let globalKimiMd: string | undefined;
@@ -304,7 +314,7 @@ Use "outputType": "log" when you only need to log internally without messaging t
     const session = createSession({
       workDir: '/workspace/group',
       sessionId: input.sessionId,
-      model: 'kimi-latest',
+      model: 'kimi-code',  // Use kimi-code as configured in credentials
       yoloMode: true,  // Auto-approve tool calls (similar to bypassPermissions)
       thinking: false,
     });
@@ -312,9 +322,17 @@ Use "outputType": "log" when you only need to log internally without messaging t
     newSessionId = session.sessionId;
     log(`Session initialized: ${newSessionId}`);
 
-    const turn = session.prompt(globalKimiMd 
-      ? `${globalKimiMd}\n\n${structuredOutputPrompt}` 
-      : structuredOutputPrompt);
+    // Build full context: group KIMI.md + global KIMI.md + structured output instructions
+    let fullContext = structuredOutputPrompt;
+    if (groupKimiMd && globalKimiMd) {
+      fullContext = `${groupKimiMd}\n\n${globalKimiMd}\n\n${structuredOutputPrompt}`;
+    } else if (groupKimiMd) {
+      fullContext = `${groupKimiMd}\n\n${structuredOutputPrompt}`;
+    } else if (globalKimiMd) {
+      fullContext = `${globalKimiMd}\n\n${structuredOutputPrompt}`;
+    }
+    
+    const turn = session.prompt(fullContext);
 
     let fullResponse = '';
 
